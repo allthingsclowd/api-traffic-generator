@@ -5,11 +5,20 @@
 #          governance policy violations, OWASP Top 10 patterns, shadow, and zombie APIs.
 # Usage: ./api-tester.sh [http(s)://your-haproxy-host:port]
 
+# See https://raw.githubusercontent.com/allthingsclowd/api-traffic-generator/refs/heads/grazzer/api_tester.sh for the original version that's actually used in the repo.
+
 # --- Configuration ---
 set -euo pipefail # Exit on error, undefined variable, or pipe failure
 
 # Target Host: Default to http://localhost if no argument is provided
-HOST=${1:-http://localhost}
+# Enhanced Target Host Handling
+if [[ $# -eq 2 ]]; then
+  CUSTOM_HOST_HEADER="$1"
+  HOST="$2"
+else
+  HOST=${1:-http://localhost}
+  CUSTOM_HOST_HEADER=""
+fi
 # Log File: Timestamped log file in /tmp
 LOG=/tmp/api_tester_$(date '+%Y-%m-%d_%H-%M-%S').log
 # Duration: How long the script should run in seconds
@@ -235,11 +244,18 @@ hit_api() {
 
     # --- Build curl arguments array ---
     # Start with base options
-    local curl_args=(-s -i -X "$method") # Use -i, add method
+    local curl_args=(-s -i -k -X "$method") # Use -i, add method
 
     # Add headers using mapfile/readarray
     local header_args=()
     mapfile -t header_args < <(build_headers_args_list "$user" "$role" "$proto_header" "$omit_auth" "$add_pii_header" "$content_type")
+    
+    # Inject Host header override if provided
+    if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
+    header_args+=("-H")
+    header_args+=("Host: $CUSTOM_HOST_HEADER")
+    fi
+
     curl_args+=("${header_args[@]}") # Append header arguments
 
     # Add data payload if body is not empty
