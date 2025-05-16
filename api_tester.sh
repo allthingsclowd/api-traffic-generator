@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+
 # Author: Graham Land & AI Assistant
-# Version: 3.1.0
+# Version: 3.2.0 # Increment version for payload updates
 # Purpose: Simulate diverse API traffic for SALT Security testing, including valid requests,
 #          governance policy violations, OWASP Top 10 patterns, shadow, and zombie APIs.
 # Usage: ./api-tester.sh [http(s)://your-haproxy-host:port]
@@ -125,7 +126,7 @@ generate_uuid() {
 # Function to log actions to console and file
 log_action() {
   # Use printf for better formatting control and to avoid potential echo interpretation issues
-  printf "%s [+] %s\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$LOG"
+  printf "%s [+] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$LOG"
 }
 
 # Function to generate realistic-looking JSON payload
@@ -184,7 +185,7 @@ build_headers_args_list() {
   echo "-H"
   echo "X-Request-ID: $(generate_uuid)"
   echo "-H"
-  echo "User-Agent: APITrafficGenerator/3.1.3" # Version Bump
+  echo "User-Agent: APITrafficGenerator/3.2.0" # Version Bump
   echo "-H"
   echo "X-Forwarded-For: 192.168.$((RANDOM % 256)).$((RANDOM % 256))"
   echo "-H"
@@ -213,6 +214,17 @@ build_headers_args_list() {
     echo "-H"
     echo "X-Leaked-Data: $pii_header_val"
   fi
+}
+
+# Function to send API requests with specific content types
+send_api_with_payload() {
+    local method="$1"
+    local url="$2"
+    local note="$3"
+    local body="$4"
+    local content_type="$5"
+
+    hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
 
 
@@ -364,8 +376,8 @@ hit_api() {
 # ... (No changes needed in the rest of the script v3.1.0 - just update version number below) ...
 
 # --- Update Version Number in Main Loop Logging ---
-# Find the log_action lines in the main execution section and update to v3.1.3
-# Example: log_action "Starting diverse API traffic generation for $HOST (v3.1.3)"
+# Find the log_action lines in the main execution section and update to v3.2.0
+# Example: log_action "Starting diverse API traffic generation for $HOST (v3.2.0)"
 
 
 # --- Traffic Generation Functions ---
@@ -380,6 +392,7 @@ generate_valid_traffic() {
     local method=""
     local body=""
     local payload_type="generic"
+    local content_type="application/json" # Default
 
     if [[ "$path" == *"{id}"* ]]; then
         method=$(rand_elem "GET" "PUT" "PATCH" "DELETE")
@@ -392,10 +405,23 @@ generate_valid_traffic() {
 
     if [[ "$method" == "POST" || "$method" == "PUT" || "$method" == "PATCH" ]]; then
         body=$(get_realistic_payload "$payload_type")
+
+        # Add content type variation
+        if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
+          case $((RANDOM % 3)) in
+            0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
+            1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
+            2) content_type="text/plain"; note+="-Text"; ;;
+          esac
+        fi
     fi
 
-    # Call hit_api without any special flags
-    hit_api "$method" "$path" "$note" "$body"
+    # Call hit_api or send_api_with_payload
+    if [[ "$content_type" != "application/json" ]]; then
+      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type"
+    else
+      hit_api "$method" "$path" "$note" "$body"
+    fi
 }
 
 # 2. Generate Governance Policy Violation Traffic
@@ -410,6 +436,7 @@ generate_governance_violation() {
     local add_pii_header_flag=false
     local force_protocol_flag="HTTP" # FORCE HTTP
     local pii_location=$((RANDOM % 3)) # 0: body, 1: query param, 2: header
+    local content_type="application/json"
 
     log_action "Preparing Governance Violation for: $path"
 
@@ -427,6 +454,16 @@ generate_governance_violation() {
           value=${value//\"/\\\"}
           body="{\"sensitiveField\": \"$value\", \"context\": \"governance-test\", \"original_key\": \"$key\"}"
           note+=": PII in Body over $force_protocol_flag"
+
+          # Add content type variation
+          if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
+            case $((RANDOM % 3)) in
+              0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
+              1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
+              2) content_type="text/plain"; note+="-Text"; ;;
+            esac
+          fi
+
         else
            method="POST" # Force POST if we wanted body PII but got GET
            local key=$(echo "$pii_item" | cut -d= -f1)
@@ -434,6 +471,15 @@ generate_governance_violation() {
            value=${value//\"/\\\"}
            body="{\"sensitiveField\": \"$value\", \"context\": \"governance-test\", \"original_key\": \"$key\"}"
            note+=": PII in Body over $force_protocol_flag (Forced POST)"
+
+           # Add content type variation
+           if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
+             case $((RANDOM % 3)) in
+               0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
+               1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
+               2) content_type="text/plain"; note+="-Text"; ;;
+             esac
+           fi
         fi
         ;;
       1) # PII in Query Parameter
@@ -457,7 +503,11 @@ generate_governance_violation() {
     fi
 
     # Make the API call passing the flags
-    hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag"
+    if [[ "$content_type" != "application/json" ]]; then
+      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag"
+    else
+      hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag" "$content_type"
+    fi
 }
 
 
@@ -510,6 +560,15 @@ generate_owasp_attack() {
          method=$(rand_elem "POST" "PUT")
          local base_payload=$(get_realistic_payload "user")
          body=$(echo "$base_payload" | sed 's/}$/, "isAdmin": true, "unexpectedField": "injected"}/')
+
+         # Add content type variation
+         if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
+           case $((RANDOM % 3)) in
+             0) content_type_override="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
+             1) content_type_override="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
+             2) content_type_override="text/plain"; note+="-Text"; ;;
+           esac
+         fi
          ;;
       3) # API8/API7 - Security Misconfiguration
          note+="/API8/7(Misconfig)"
@@ -540,8 +599,16 @@ generate_owasp_attack() {
                  note+="-LargeBody"
               else
                  body=$(get_realistic_payload)
+
+                 # Add content type variation
+                 if (( RANDOM % 5 == 0 )); then
+                   case $((RANDOM % 3)) in
+                     0) content_type_override="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
+                     1) content_type_override="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
+                     2) content_type_override="text/plain"; note+="-Text"; ;;
+                   esac
+                 fi
               fi
-          fi
           ;;
       *) # Default fallback
         note+=" (Fallback)"
@@ -550,7 +617,11 @@ generate_owasp_attack() {
     esac
 
     # Make the API call passing calculated flags
-    hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag" "$content_type_override"
+    if [[ -n "$content_type_override" ]] && [[ "$content_type_override" != "application/json" ]]; then
+      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type_override" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag"
+    else
+      hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag" "$content_type_override"
+    fi
 }
 
 # 4. Generate Shadow & Zombie API Traffic
@@ -574,7 +645,7 @@ generate_shadow_zombie_traffic() {
 
 
 # --- Main Execution Loop ---
-log_action "Starting diverse API traffic generation for $HOST (v3.1.0)"
+log_action "Starting diverse API traffic generation for $HOST (v3.2.0)"
 log_action "Target duration: $DURATION_SECONDS seconds. Logging to $LOG"
 log_action "--- Using HAProxy backend for simulated responses ---"
 echo "--- Script Start: $(date) ---" >> "$LOG"
@@ -584,18 +655,21 @@ while (( $(date +%s) - start_time < $DURATION_SECONDS )); do
 
     traffic_type_roll=$((RANDOM % 100))
 
-    if (( traffic_type_roll < 60 )); then
+    if (( traffic_type_roll < 55 )); then # Slightly reduce valid traffic
         log_action "---> Generating Valid Traffic <---"
         generate_valid_traffic || log_action "ERROR in generate_valid_traffic"
-    elif (( traffic_type_roll < 75 )); then
+    elif (( traffic_type_roll < 70 )); then
         log_action "---> Generating Governance Violation <---"
         generate_governance_violation || log_action "ERROR in generate_governance_violation"
-    elif (( traffic_type_roll < 90 )); then
+    elif (( traffic_type_roll < 85 )); then
         log_action "---> Generating OWASP Attack <---"
         generate_owasp_attack || log_action "ERROR in generate_owasp_attack"
-    else
+    elif (( traffic_type_roll < 95 )); then
         log_action "---> Generating Shadow/Zombie Traffic <---"
         generate_shadow_zombie_traffic || log_action "ERROR in generate_shadow_zombie_traffic"
+    else
+        log_action "---> Generating Payload Variation Test <---"
+        generate_valid_traffic # Reuse valid traffic to test different payloads
     fi
 
     # Add || true to the function calls above if you want the script to continue even if a function fails internally
