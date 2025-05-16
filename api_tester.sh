@@ -185,7 +185,7 @@ build_headers_args_list() {
   echo "-H"
   echo "X-Request-ID: $(generate_uuid)"
   echo "-H"
-  echo "User-Agent: APITrafficGenerator/3.2.0" # Version Bump
+  echo "User-Agent: APITrafficGenerator/3.2.0"
   echo "-H"
   echo "X-Forwarded-For: 192.168.$((RANDOM % 256)).$((RANDOM % 256))"
   echo "-H"
@@ -193,7 +193,6 @@ build_headers_args_list() {
   echo "-H"
   echo "X-Role: $role"
 
-  # Authentication Header (Conditional)
   if [[ "$omit_auth" == "false" ]]; then
     echo "-H"
     if [[ "$user" == "attacker" || "$role" == "anonymous" ]]; then
@@ -205,11 +204,8 @@ build_headers_args_list() {
     echo "X-API-Key: demo-key-for-$user"
   fi
 
-  # Add PII Header (For Governance Tests)
   if [[ "$add_pii_header" == "true" ]]; then
     local pii_header_val=$(rand_elem "${PII_DATA[@]}")
-    # Basic escaping for quotes within the header value itself if necessary
-    # Although not strictly needed here as it's a separate array element now
     pii_header_val=${pii_header_val//\"/\\\"}
     echo "-H"
     echo "X-Leaked-Data: $pii_header_val"
@@ -226,8 +222,6 @@ send_api_with_payload() {
 
     hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
-
-
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
@@ -254,86 +248,59 @@ hit_api() {
     if [[ "$add_pii_header" == "true" ]]; then log_action "  (Flag: Adding PII Header)"; fi
     if [[ "$content_type" != "application/json" ]]; then log_action "  (Flag: Content-Type: $content_type)"; fi
 
-    # --- Build curl arguments array ---
-    # Start with base options
-    local curl_args=(-s -i -k -X "$method") # Use -i, add method
+    local curl_args=(-s -i -k -X "$method")
 
-    # Add headers using mapfile/readarray
     local header_args=()
     mapfile -t header_args < <(build_headers_args_list "$user" "$role" "$proto_header" "$omit_auth" "$add_pii_header" "$content_type")
-    
-    # Inject Host header override if provided
+
     if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
-    header_args+=("-H")
-    header_args+=("Host: $CUSTOM_HOST_HEADER")
+        header_args+=("-H")
+        header_args+=("Host: $CUSTOM_HOST_HEADER")
     fi
 
-    curl_args+=("${header_args[@]}") # Append header arguments
+    curl_args+=("${header_args[@]}")
 
-    # Add data payload if body is not empty
     if [[ -n "$body" ]]; then
-        # No extra escaping needed for -d when passed as separate array element
         curl_args+=(-d "$body")
         log_action "  Request Body: $body"
     fi
 
-    # Add URL
     curl_args+=("$url")
-
-    # Add write-out for status code (NO newlines)
     curl_args+=(-w "%{http_code}")
 
-    # --- Execute curl (NO eval needed) ---
-    printf -v cmd_str_log "curl %q " "${curl_args[@]}" # For logging purposes
-    # log_action "  Executing approx: $cmd_str_log" # Uncomment for deep debug
+    printf -v cmd_str_log "curl %q " "${curl_args[@]}"
 
     local raw_output exit_code
-    # Execute directly using the array. Capture stdout and stderr.
     raw_output=$(curl "${curl_args[@]}" 2>&1)
     exit_code=$?
 
-    # --- DEBUGGING ---
-    # log_action "  DEBUG: curl exit code: $exit_code"
-    # log_action "  DEBUG: Raw curl output:\n$raw_output"
-    # --- END DEBUGGING ---
-
-    if [[ $exit_code -ne 0 && $exit_code -ne 22 ]]; then # Ignore exit code 22 (common for 4xx/5xx errors with -i/-w)
+    if [[ $exit_code -ne 0 && $exit_code -ne 22 ]]; then
         log_action "  ERROR: curl command failed with exit code $exit_code for $method $url."
         log_action "  Executed command approx: $cmd_str_log"
         log_action "  Curl output (if any): $raw_output"
         return 1
     fi
 
-    # --- Parsing Logic (v3.1.3) ---
     local response_headers=""
     local response_body=""
     local status_code=""
     local headers_done=false
     local line_num=0
-    local http_status_line="" # Store the HTTP/1.1 line
+    local http_status_line=""
 
-    # Read line by line from raw_output
     while IFS= read -r line; do
         ((line_num++))
-        line=${line%$'\r'} # Trim trailing CR
+        line=${line%$'\r'}
 
-        # Check for the numeric status code line added by -w (at the very end)
-        # Use improved regex to extract digits even if surrounded by junk
         if [[ "$line" =~ [^0-9]*([0-9]+)[^0-9]*$ ]]; then
-            # Check if this is the *last* line of output
-            # A simple way is to check if status_code is already found; -w puts it last.
-            # But easier: just capture the *last* match.
             status_code="${BASH_REMATCH[1]}"
-            # log_action "  DEBUG: Found potential status code line: $line -> $status_code"
-            continue # Don't add this line to headers or body
+            continue
         fi
 
-        # Store or process other lines
         if [[ "$headers_done" == false ]]; then
             if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
-                 http_status_line="$line" # Store the HTTP status line
-                 # log_action "  DEBUG: Stored HTTP status line: $line"
-                 continue # Don't add to headers variable
+                http_status_line="$line"
+                continue
             fi
             if [[ -z "$line" ]]; then
                 headers_done=true
@@ -345,342 +312,25 @@ hit_api() {
         fi
     done <<< "$raw_output"
 
-    # --- Validation ---
     if ! [[ "$status_code" =~ ^[0-9]+$ ]]; then
-       # Fallback: Try to extract status from the HTTP/1.1 line if -w failed
-       if [[ -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+        if [[ -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
             status_code="${BASH_REMATCH[1]}"
             log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line."
-       else
-           log_action "  ERROR: Failed to parse valid HTTP status code from curl output (checked -w line and HTTP status line)."
-           log_action "  Curl exit code was $exit_code."
-           log_action "  Raw Output was:\n$raw_output" # Log the whole thing
-           return 1
-       fi
+        else
+            log_action "  ERROR: Failed to parse valid HTTP status code from curl output."
+            log_action "  Curl exit code was $exit_code."
+            log_action "  Raw Output was:\n$raw_output"
+            return 1
+        fi
     fi
 
-    # Trim potential trailing newline from body
     response_body=${response_body%$'\n'}
 
-    # --- Logging Results ---
-    # Log the header arguments used (more reliable than reconstructing the command)
-    log_action "  Request Headers Args Used:\n${header_args[*]}" # Log the array elements
+    log_action "  Request Headers Args Used:\n${header_args[*]}"
     log_action "  Response Status: $status_code"
     printf "  Response Headers:\n%s" "$response_headers" | tee -a "$LOG"
-    log_action "" # Add newline after headers
+    log_action ""
     log_action "  Response Body:\n${response_body}"
-    echo "" | tee -a "$LOG" # Add a blank line for readability
+    echo "" | tee -a "$LOG"
 }
 
-# --- Rest of the script (Traffic Generation Functions, Main Loop) ---
-# ... (No changes needed in the rest of the script v3.1.0 - just update version number below) ...
-
-# --- Update Version Number in Main Loop Logging ---
-# Find the log_action lines in the main execution section and update to v3.2.0
-# Example: log_action "Starting diverse API traffic generation for $HOST (v3.2.0)"
-
-
-# --- Traffic Generation Functions ---
-
-# 1. Generate Valid Traffic
-generate_valid_traffic() {
-    local api_group=$(rand_elem "eshop" "hr" "finance" "products" "banking")
-    local endpoints_ref="${api_group^^}_API_ENDPOINTS[@]"
-    local endpoint=$(rand_elem "${!endpoints_ref}")
-    local path="$HOST/$api_group$endpoint"
-    local note="Valid Traffic - ${api_group^} API"
-    local method=""
-    local body=""
-    local payload_type="generic"
-    local content_type="application/json" # Default
-
-    if [[ "$path" == *"{id}"* ]]; then
-        method=$(rand_elem "GET" "PUT" "PATCH" "DELETE")
-        path=${path/\{id\}/$((RANDOM % 1000 + 1))}
-        payload_type=${api_group%s}
-    else
-        method=$(rand_elem "GET" "POST")
-        payload_type=${api_group%s}
-    fi
-
-    if [[ "$method" == "POST" || "$method" == "PUT" || "$method" == "PATCH" ]]; then
-        body=$(get_realistic_payload "$payload_type")
-
-        # Add content type variation
-        if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
-          case $((RANDOM % 3)) in
-            0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
-            1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
-            2) content_type="text/plain"; note+="-Text"; ;;
-          esac
-        fi
-    fi
-
-    # Call hit_api or send_api_with_payload
-    if [[ "$content_type" != "application/json" ]]; then
-      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type"
-    else
-      hit_api "$method" "$path" "$note" "$body"
-    fi
-}
-
-# 2. Generate Governance Policy Violation Traffic
-generate_governance_violation() {
-    local endpoint=$(rand_elem "${GOVERNANCE_ENDPOINTS[@]}")
-    local path="$HOST$endpoint"
-    local note="Governance Violation Test"
-    local method=$(rand_elem "GET" "POST" "PUT")
-    local body=""
-    # Flags for hit_api
-    local omit_auth_flag=false
-    local add_pii_header_flag=false
-    local force_protocol_flag="HTTP" # FORCE HTTP
-    local pii_location=$((RANDOM % 3)) # 0: body, 1: query param, 2: header
-    local content_type="application/json"
-
-    log_action "Preparing Governance Violation for: $path"
-
-    if [[ "$path" == *"{id}"* ]]; then
-      path=${path/\{id\}/$((RANDOM % 1000 + 1))}
-    fi
-
-    local pii_item=$(rand_elem "${PII_DATA[@]}")
-
-    case "$pii_location" in
-      0) # PII in Body
-        if [[ "$method" == "POST" || "$method" == "PUT" ]]; then
-          local key=$(echo "$pii_item" | cut -d= -f1)
-          local value=$(echo "$pii_item" | cut -d= -f2-)
-          value=${value//\"/\\\"}
-          body="{\"sensitiveField\": \"$value\", \"context\": \"governance-test\", \"original_key\": \"$key\"}"
-          note+=": PII in Body over $force_protocol_flag"
-
-          # Add content type variation
-          if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
-            case $((RANDOM % 3)) in
-              0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
-              1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
-              2) content_type="text/plain"; note+="-Text"; ;;
-            esac
-          fi
-
-        else
-           method="POST" # Force POST if we wanted body PII but got GET
-           local key=$(echo "$pii_item" | cut -d= -f1)
-           local value=$(echo "$pii_item" | cut -d= -f2-)
-           value=${value//\"/\\\"}
-           body="{\"sensitiveField\": \"$value\", \"context\": \"governance-test\", \"original_key\": \"$key\"}"
-           note+=": PII in Body over $force_protocol_flag (Forced POST)"
-
-           # Add content type variation
-           if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
-             case $((RANDOM % 3)) in
-               0) content_type="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
-               1) content_type="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
-               2) content_type="text/plain"; note+="-Text"; ;;
-             esac
-           fi
-        fi
-        ;;
-      1) # PII in Query Parameter
-         local pii_encoded=${pii_item// /%20} # Basic encoding
-         pii_encoded=${pii_encoded//@/%40}
-         pii_encoded=${pii_encoded/!/%21}
-         path+="?$pii_encoded"
-         note+=": PII in Query Param over $force_protocol_flag"
-         if [[ "$method" != "GET" ]]; then method="GET"; fi # Force GET for query param
-        ;;
-      2) # PII in Header
-         add_pii_header_flag=true # Set flag for hit_api
-         note+=": PII in Custom Header over $force_protocol_flag"
-        ;;
-    esac
-
-    # Randomly add Missing Auth violation
-    if (( RANDOM % 4 == 0 )); then
-        omit_auth_flag=true
-        note+=", Missing Auth"
-    fi
-
-    # Make the API call passing the flags
-    if [[ "$content_type" != "application/json" ]]; then
-      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag"
-    else
-      hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag" "$content_type"
-    fi
-}
-
-
-# 3. Generate OWASP API Top 10 Attack Traffic
-generate_owasp_attack() {
-    local endpoint=$(rand_elem "${OWASP_ENDPOINTS[@]}")
-    local path="$HOST$endpoint"
-    local note="OWASP Attack Simulation"
-    local method=""
-    local body=""
-    # Flags for hit_api
-    local omit_auth_flag=false
-    local add_pii_header_flag=false # Usually false for OWASP unless testing leaky headers
-    local force_protocol_flag=""    # Default unless testing misconfig
-    local content_type_override=""  # Default unless testing injection/content-type
-
-    log_action "Preparing OWASP Attack for: $path"
-
-    if [[ "$path" == *"{id}"* ]]; then
-      local target_id=$((RANDOM % 1000 + 500))
-      path=${path/\{id\}/$target_id}
-      note+=": TargetID=$target_id"
-    fi
-
-    local attack_type=$((RANDOM % 6))
-
-    # Tailor attack based on endpoint name if possible (optional enhancement)
-    # ... (logic to set attack_type based on path can be added here) ...
-    note+=" Type=$attack_type" # Log the chosen attack type number
-
-    case "$attack_type" in
-      0) # API1/API5 - BOLA/BFLA
-        note+="/API1/5(AuthZ)"
-        # Use attacker/guest role - handled by hit_api default randomization, can be forced if needed
-        if [[ "$path" != *"{id}"* && "$path" == *"/users"* ]]; then
-             method="DELETE" # Try forbidden method
-        else
-             method="GET"
-        fi
-        # No special flags needed, rely on random user/role in hit_api
-        ;;
-      1) # API2/API5 - Broken Authentication
-        note+="/API2/5(AuthN)"
-        method="GET"
-        omit_auth_flag=true # Force missing auth
-        if (( RANDOM % 2 == 0 )); then method="POST"; body=$(get_realistic_payload); fi # Maybe try POST/PUT too
-         ;;
-      2) # API6 - Mass Assignment
-         note+="/API6(MassAssign)"
-         method=$(rand_elem "POST" "PUT")
-         local base_payload=$(get_realistic_payload "user")
-         body=$(echo "$base_payload" | sed 's/}$/, "isAdmin": true, "unexpectedField": "injected"}/')
-
-         # Add content type variation
-         if (( RANDOM % 5 == 0 )) && [[ "$method" != "GET" ]]; then
-           case $((RANDOM % 3)) in
-             0) content_type_override="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
-             1) content_type_override="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
-             2) content_type_override="text/plain"; note+="-Text"; ;;
-           esac
-         fi
-         ;;
-      3) # API8/API7 - Security Misconfiguration
-         note+="/API8/7(Misconfig)"
-         method="GET"
-         force_protocol_flag="HTTP" # Force HTTP
-         ;;
-      4) # API8/API10 - Injection / Malformed Data
-         note+="/API8/10(Inject/Malformed)"
-         method=$(rand_elem "GET" "POST" "PUT")
-         if (( RANDOM % 2 == 0 )) && [[ "$method" != "GET" ]]; then
-             body=$(get_malicious_payload)
-             note+="-Body"
-             if (( RANDOM % 3 == 0 )); then content_type_override="application/xml"; note+="-XMLContentType"; fi
-         else
-             local malicious_param=$(rand_elem "${MALICIOUS_PAYLOADS[@]}")
-             malicious_param=${malicious_param// /%20}; malicious_param=${malicious_param//\"/%22}; malicious_param=${malicious_param//\'/%27}
-             path+="?param=$malicious_param"
-             note+="-QueryParam"
-             method="GET" # Force GET for query param attack
-         fi
-         ;;
-       5) # API4 - Lack of Resources (Large Payload)
-          note+="/API4(Resource)"
-          method=$(rand_elem "GET" "POST")
-          if [[ "$method" == "POST" ]]; then
-              if (( RANDOM % 2 == 0 )); then
-                 body=$(echo "{\"largeData\": \"$(head -c 2048 /dev/urandom | base64)\"}")
-                 note+="-LargeBody"
-              else
-                 body=$(get_realistic_payload)
-
-                 # Add content type variation
-                 if (( RANDOM % 5 == 0 )); then
-                   case $((RANDOM % 3)) in
-                     0) content_type_override="application/xml"; body='<?xml version="1.0"?><data>'$(echo "$body" | jq -r '. | to_entries | .[] | "<" + .key + ">" + (.value | @text) + "</" + .key + ">" ')'</data>'; note+="-XML"; ;;
-                     1) content_type_override="application/x-www-form-urlencoded"; body=$(echo "$body" | jq -r 'to_entries | .[] | (.key + "=" + (.value | @uriencode))' | paste -sd'&' -); note+="-Form"; ;;
-                     2) content_type_override="text/plain"; note+="-Text"; ;;
-                   esac
-                 fi
-              fi
-          ;;
-      *) # Default fallback
-        note+=" (Fallback)"
-        method="GET"
-        ;;
-    esac
-
-    # Make the API call passing calculated flags
-    if [[ -n "$content_type_override" ]] && [[ "$content_type_override" != "application/json" ]]; then
-      send_api_with_payload "$method" "$path" "$note" "$body" "$content_type_override" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag"
-    else
-      hit_api "$method" "$path" "$note" "$body" "$omit_auth_flag" "$add_pii_header_flag" "$force_protocol_flag" "$content_type_override"
-    fi
-}
-
-# 4. Generate Shadow & Zombie API Traffic
-generate_shadow_zombie_traffic() {
-    local endpoint=$(rand_elem "${SHADOW_ZOMBIE_ENDPOINTS[@]}")
-    local path="$HOST$endpoint"
-    local note=""
-    local method="GET" # Typically discovered via GET
-
-    if [[ "$path" == *"/shadow-api/"* ]]; then
-        note="Shadow API Call"
-    elif [[ "$path" == *"/zombie-api/"* || "$path" == *"/legacy"* || "$path" == *"/v1/"* ]]; then
-        note="Zombie API Call"
-    else
-        note="Undocumented Endpoint Call"
-    fi
-
-    # Call hit_api without any special flags
-    hit_api "$method" "$path" "$note"
-}
-
-
-# --- Main Execution Loop ---
-log_action "Starting diverse API traffic generation for $HOST (v3.2.0)"
-log_action "Target duration: $DURATION_SECONDS seconds. Logging to $LOG"
-log_action "--- Using HAProxy backend for simulated responses ---"
-echo "--- Script Start: $(date) ---" >> "$LOG"
-
-start_time=$(date +%s)
-while (( $(date +%s) - start_time < $DURATION_SECONDS )); do
-
-    traffic_type_roll=$((RANDOM % 100))
-
-    if (( traffic_type_roll < 55 )); then # Slightly reduce valid traffic
-        log_action "---> Generating Valid Traffic <---"
-        generate_valid_traffic || log_action "ERROR in generate_valid_traffic"
-    elif (( traffic_type_roll < 70 )); then
-        log_action "---> Generating Governance Violation <---"
-        generate_governance_violation || log_action "ERROR in generate_governance_violation"
-    elif (( traffic_type_roll < 85 )); then
-        log_action "---> Generating OWASP Attack <---"
-        generate_owasp_attack || log_action "ERROR in generate_owasp_attack"
-    elif (( traffic_type_roll < 95 )); then
-        log_action "---> Generating Shadow/Zombie Traffic <---"
-        generate_shadow_zombie_traffic || log_action "ERROR in generate_shadow_zombie_traffic"
-    else
-        log_action "---> Generating Payload Variation Test <---"
-        generate_valid_traffic # Reuse valid traffic to test different payloads
-    fi
-
-    # Add || true to the function calls above if you want the script to continue even if a function fails internally
-    # e.g., generate_valid_traffic || true
-
-    sleep_duration=$((RANDOM % 4 + 1))
-    log_action "Sleeping for $sleep_duration seconds..."
-    sleep "$sleep_duration"
-
-done
-
-log_action "Traffic generation complete after running for $DURATION_SECONDS seconds."
-log_action "Detailed logs are available in: $LOG"
-echo "--- Script End: $(date) ---" >> "$LOG"
