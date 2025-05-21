@@ -293,7 +293,7 @@ function hit_api { # NOSONAR
     if [[ "$add_pii_header" == "true" ]]; then log_action "  (Flag: Adding PII Header)"; fi
     if [[ "$content_type" != "application/json" ]]; then log_action "  (Flag: Content-Type: $content_type)"; fi
 
-    local curl_args=(-s -i -k -X "$method") # -s for silent, -i to include headers, -k allow insecure
+    local curl_args=(-s -i -k --max-time 15 -X "$method") # Added --max-time 15
 
     local header_args=()
     mapfile -t header_args < <(build_headers_args_list "$user" "$role" "$proto_header" "$omit_auth" "$add_pii_header" "$content_type")
@@ -313,19 +313,41 @@ function hit_api { # NOSONAR
     curl_args+=("$url")
     curl_args+=(-w "\nHTTP_STATUS_CODE:%{http_code}") # Append status code to output, separated by newline
 
-    printf -v cmd_str_log "curl %q " "${curl_args[@]}" # For logging the command safely
+    # Correctly build the command string for logging
+    local cmd_str_log_array=("curl")
+    for arg in "${curl_args[@]}"; do
+        cmd_str_log_array+=("$(printf '%q' "$arg")")
+    done
+    local cmd_str_log="${cmd_str_log_array[*]}"
 
     local raw_output exit_code
     echo "DEBUG: Executing curl command: $cmd_str_log" >&2
+
+    # Temporarily disable exit on error for the curl command to handle its exit code
+    local prev_set_e_state=""
+    if [[ $- == *e* ]]; then prev_set_e_state="enabled"; fi
+    set +e
+
     raw_output=$(curl "${curl_args[@]}" 2>&1)
     exit_code=$?
+
+    if [[ "$prev_set_e_state" == "enabled" ]]; then set -e; fi # Restore set -e
+
     echo "DEBUG: curl command finished. Exit code: $exit_code" >&2
     echo "DEBUG: Raw curl output:\n$raw_output" >&2
 
-    if [[ $exit_code -ne 0 && $exit_code -ne 22 && $exit_code -ne 60 ]]; then # 22 for 4xx/5xx, 60 for peer cert issues with -k
+    # Handle curl exit codes
+    # Common successful exit is 0.
+    # Exit code 22: HTTP page not retrieved. "This is not an error." (e.g., 404, 500s)
+    # Exit code 28: Operation timeout.
+    # Exit code 18: Partial file.
+    # Exit code 60: Peer certificate cannot be authenticated with known CA certificates (should be mitigated by -k)
+    if [[ $exit_code -ne 0 && $exit_code -ne 22 && $exit_code -ne 18 && $exit_code -ne 28 && $exit_code -ne 60 ]]; then
         log_action "  ERROR: curl command failed with unexpected exit code $exit_code for $method $url."
         log_action "  Executed command approx: $cmd_str_log"
         log_action "  Curl output (if any): $raw_output"
+    elif [[ $exit_code -eq 18 || $exit_code -eq 28 ]]; then
+        log_action "  WARNING: curl command for $method $url completed with exit code $exit_code (Timeout/Partial File). Output: $raw_output"
     fi
 
     # For this step, just log raw output and return 0. Response parsing will be next.
@@ -505,7 +527,7 @@ while true; do
   #   exit 1
   # fi
   # echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2 # Removed granular debug
-  # echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2 # Removed, loop top message covers this
+  echo "DEBUG: REQUEST_COUNT is now $REQUEST_COUNT." >&2 # Simplified confirmation
 
 
   # Random delay between requests (e.g., 0.1 to 1 second)
