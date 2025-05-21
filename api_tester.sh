@@ -270,23 +270,24 @@ echo "DEBUG: All Helper Functions defined." >&2
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
 echo "DEBUG: Defining hit_api function." >&2
 hit_api() {
-    local method=$1
-    local url=$2
-    local note=$3
-    local body=${4:-""}
-    local omit_auth=${5:-false}
-    local add_pii_header=${6:-false}
-    local force_protocol=${7:-""}
-    local content_type_override=${8:-""}
+    echo "DEBUG: Entered hit_api function. (Attempt 1)" >&2
+    # local method=$1
+    # local url=$2
+    # local note=$3
+    # local body=${4:-""}
+    # local omit_auth=${5:-false}
+    # local add_pii_header=${6:-false}
+    # local force_protocol=${7:-""}
+    # local content_type_override=${8:-""}
 
-    echo "DEBUG: Entered hit_api function." >&2
-    local user=$(rand_elem "${USERS[@]}")
-    local role=$(rand_elem "${ROLES[@]}")
-    local proto_header=$(rand_elem "${PROTOCOLS[@]}")
-    if [[ -n "$force_protocol" ]]; then
-        proto_header="$force_protocol"
-    fi
-    local content_type=${content_type_override:-"application/json"}
+    # echo "DEBUG: Entered hit_api function." >&2 # This was the previous debug line that wasn't reached
+    # local user=$(rand_elem "${USERS[@]}")
+    # local role=$(rand_elem "${ROLES[@]}")
+    # local proto_header=$(rand_elem "${PROTOCOLS[@]}")
+    # if [[ -n "$force_protocol" ]]; then
+    #     proto_header="$force_protocol"
+    # fi
+    # local content_type=${content_type_override:-"application/json"}
 
     log_action "Attempting [$note] | Method: $method | URL: $url | User: $user | Role: $role | Protocol: $proto_header"
     if [[ "$omit_auth" == "true" ]]; then log_action "  (Flag: Omitting Auth)"; fi
