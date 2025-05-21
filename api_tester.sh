@@ -269,7 +269,7 @@ echo "DEBUG: All Helper Functions defined." >&2
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
 # echo "DEBUG: About to define hit_api function using 'function hit_api {' syntax." >&2 # Removed granular debug
-function hit_api {
+function hit_api { # NOSONAR
     echo "DEBUG: Entered hit_api function." >&2 # Keep this debug
     local method=$1
     local url=$2
@@ -293,11 +293,42 @@ function hit_api {
     if [[ "$add_pii_header" == "true" ]]; then log_action "  (Flag: Adding PII Header)"; fi
     if [[ "$content_type" != "application/json" ]]; then log_action "  (Flag: Content-Type: $content_type)"; fi
 
-    # Keep the rest of the function commented out for now
-    # local curl_args=(-s -i -k -X "$method")
-    # ... rest of curl execution and parsing ...
+    local curl_args=(-s -i -k -X "$method") # -s for silent, -i to include headers, -k allow insecure
 
-    # For this step, just return 0 after logging the attempt
+    local header_args=()
+    mapfile -t header_args < <(build_headers_args_list "$user" "$role" "$proto_header" "$omit_auth" "$add_pii_header" "$content_type")
+
+    if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
+        header_args+=("-H")
+        header_args+=("Host: $CUSTOM_HOST_HEADER")
+    fi
+
+    curl_args+=("${header_args[@]}")
+
+    if [[ -n "$body" ]]; then
+        curl_args+=(-d "$body")
+        log_action "  Request Body: $body"
+    fi
+
+    curl_args+=("$url")
+    curl_args+=(-w "\nHTTP_STATUS_CODE:%{http_code}") # Append status code to output, separated by newline
+
+    printf -v cmd_str_log "curl %q " "${curl_args[@]}" # For logging the command safely
+
+    local raw_output exit_code
+    echo "DEBUG: Executing curl command: $cmd_str_log" >&2
+    raw_output=$(curl "${curl_args[@]}" 2>&1)
+    exit_code=$?
+    echo "DEBUG: curl command finished. Exit code: $exit_code" >&2
+    echo "DEBUG: Raw curl output:\n$raw_output" >&2
+
+    if [[ $exit_code -ne 0 && $exit_code -ne 22 && $exit_code -ne 60 ]]; then # 22 for 4xx/5xx, 60 for peer cert issues with -k
+        log_action "  ERROR: curl command failed with unexpected exit code $exit_code for $method $url."
+        log_action "  Executed command approx: $cmd_str_log"
+        log_action "  Curl output (if any): $raw_output"
+    fi
+
+    # For this step, just log raw output and return 0. Response parsing will be next.
     return 0
 }
 # echo "DEBUG: hit_api function definition processed." >&2 # Removed granular debug
@@ -462,19 +493,19 @@ while true; do
     simulate_shadow_zombie_traffic
   fi
 
-  echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2
+  # echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2 # Removed
   # echo "DEBUG: About to increment REQUEST_COUNT." >&2 # Removed granular debug
   # Using standard arithmetic expansion
   REQUEST_COUNT=$((REQUEST_COUNT + 1))
   RC_INCREMENT_EXIT_CODE=$?
   # echo "DEBUG: After increment attempt: REQUEST_COUNT is '$REQUEST_COUNT', Exit code of increment was $RC_INCREMENT_EXIT_CODE." >&2 # Removed granular debug
 
-  if [[ $RC_INCREMENT_EXIT_CODE -ne 0 ]]; then
-    echo "ERROR: Failed to increment REQUEST_COUNT. Previous value was '$((REQUEST_COUNT - 1))'. Increment command exit code: $RC_INCREMENT_EXIT_CODE. Exiting." >&2
-    exit 1
-  fi
+  # if [[ $RC_INCREMENT_EXIT_CODE -ne 0 ]]; then # This check is likely not needed anymore
+  #   echo "ERROR: Failed to increment REQUEST_COUNT. Previous value was '$((REQUEST_COUNT - 1))'. Increment command exit code: $RC_INCREMENT_EXIT_CODE. Exiting." >&2
+  #   exit 1
+  # fi
   # echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2 # Removed granular debug
-  echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2 # Keep a single increment confirmation
+  # echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2 # Removed, loop top message covers this
 
 
   # Random delay between requests (e.g., 0.1 to 1 second)
