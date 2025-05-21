@@ -11,7 +11,7 @@
 # --- Configuration ---
 set -euo pipefail # Exit on error, undefined variable, or pipe failure
 
-echo "DEBUG: api_tester.sh started. set -euo pipefail executed." >&2
+# echo "DEBUG: api_tester.sh started. set -euo pipefail executed." >&2 # Removed granular debug
 
 # Target Host: Default to http://localhost if no argument is provided
 # Enhanced Target Host Handling
@@ -23,20 +23,20 @@ else
   CUSTOM_HOST_HEADER=""
 fi
 
-echo "DEBUG: HOST is '$HOST', CUSTOM_HOST_HEADER is '$CUSTOM_HOST_HEADER'. About to define LOG." >&2
+# echo "DEBUG: HOST is '$HOST', CUSTOM_HOST_HEADER is '$CUSTOM_HOST_HEADER'. About to define LOG." >&2 # Removed granular debug
 
 # Explicitly test the date command
-echo "DEBUG: Testing 'date' command availability and execution..." >&2
+# echo "DEBUG: Testing 'date' command availability and execution..." >&2 # Removed granular debug
 if command -v date >/dev/null 2>&1; then
-  echo "DEBUG: 'date' command found in PATH." >&2
+  # echo "DEBUG: 'date' command found in PATH." >&2 # Removed granular debug
   DATE_OUTPUT=$(date '+%Y-%m-%d_%H-%M-%S')
   DATE_EXIT_CODE=$?
-  echo "DEBUG: 'date' command executed. Exit code: $DATE_EXIT_CODE. Output: '$DATE_OUTPUT'" >&2
+  # echo "DEBUG: 'date' command executed. Exit code: $DATE_EXIT_CODE. Output: '$DATE_OUTPUT'" >&2 # Removed granular debug
 else
   echo "ERROR: 'date' command NOT found in PATH. This is unexpected." >&2
 fi
 
-echo "DEBUG: About to define LOG variable using date." >&2
+# echo "DEBUG: About to define LOG variable using date." >&2 # Removed granular debug
 DATE_FOR_LOG=$(date '+%Y-%m-%d_%H-%M-%S')
 DATE_FOR_LOG_EXIT_CODE=$?
 
@@ -47,10 +47,10 @@ fi
 
 # Log File: Timestamped log file in /tmp
 LOG="/tmp/api_tester_${DATE_FOR_LOG}.log"
-echo "DEBUG: LOG variable defined as: $LOG" >&2
+# echo "DEBUG: LOG variable defined as: $LOG" >&2 # Removed granular debug
 # Duration: How long the script should run in seconds
 DURATION_SECONDS=180
-echo "DEBUG: DURATION_SECONDS defined as $DURATION_SECONDS" >&2
+# echo "DEBUG: DURATION_SECONDS defined as $DURATION_SECONDS" >&2 # Removed granular debug
 
 # --- API Endpoint Definitions ---
 # (Endpoint definitions remain the same as version 3.0.0)
@@ -133,7 +133,7 @@ MALICIOUS_PAYLOADS=(
   "$(head -c 1024 /dev/urandom | base64)"
 )
 
-echo "DEBUG: Simulation Parameters arrays defined." >&2
+# echo "DEBUG: Simulation Parameters arrays defined." >&2 # Removed granular debug
 # --- Helper Functions ---
 echo "DEBUG: Entering Helper Functions definitions section." >&2
 
@@ -143,7 +143,7 @@ rand_elem() {
   local index=$((RANDOM % ${#arr[@]}))
   echo "${arr[$index]}"
 }
-echo "DEBUG: rand_elem function defined." >&2
+# echo "DEBUG: rand_elem function defined." >&2 # Removed granular debug
 
 # Function to generate a random UUID
 generate_uuid() {
@@ -153,7 +153,7 @@ generate_uuid() {
     head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32
   fi
 }
-echo "DEBUG: generate_uuid function defined." >&2
+# echo "DEBUG: generate_uuid function defined." >&2 # Removed granular debug
 
 # Function to log actions to console and file
 log_action() {
@@ -164,7 +164,7 @@ log_action() {
   # Debug: Indicate log_action finished
   echo "DEBUG: log_action for '$1' completed." >&2
 }
-echo "DEBUG: log_action function defined." >&2
+# echo "DEBUG: log_action function defined." >&2 # Removed granular debug
 
 
 # Function to generate realistic-looking JSON payload
@@ -189,7 +189,7 @@ get_realistic_payload() {
       ;;
   esac
 }
-echo "DEBUG: get_realistic_payload function defined." >&2
+# echo "DEBUG: get_realistic_payload function defined." >&2 # Removed granular debug
 
 # Function to generate intentionally malformed or injectable payloads
 get_malicious_payload() {
@@ -206,7 +206,7 @@ get_malicious_payload() {
         fi
     fi
 }
-echo "DEBUG: get_malicious_payload function defined." >&2
+# echo "DEBUG: get_malicious_payload function defined." >&2 # Removed granular debug
 
 # Function to build curl header arguments (outputs one argument per line)
 build_headers_args_list() {
@@ -251,7 +251,7 @@ build_headers_args_list() {
     echo "X-Leaked-Data: $pii_header_val"
   fi
 }
-echo "DEBUG: build_headers_args_list function defined." >&2
+# echo "DEBUG: build_headers_args_list function defined." >&2 # Removed granular debug
 
 # Function to send API requests with specific content types
 send_api_with_payload() {
@@ -263,20 +263,44 @@ send_api_with_payload() {
 
     hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
-echo "DEBUG: send_api_with_payload function defined." >&2
+# echo "DEBUG: send_api_with_payload function defined." >&2 # Removed granular debug
 echo "DEBUG: All Helper Functions defined." >&2
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
-echo "DEBUG: About to define hit_api function using 'function hit_api {' syntax." >&2
+# echo "DEBUG: About to define hit_api function using 'function hit_api {' syntax." >&2 # Removed granular debug
 function hit_api {
-  echo "DEBUG: Entered hit_api function (minimal, alternative syntax)." >&2
-  # Function body is intentionally almost empty for this test.
-  # The original content of hit_api is commented out or removed for this specific debug step.
-  # We are only testing if the function definition can be parsed and the function entered.
-  return 0 # Ensure it returns successfully if entered
+    echo "DEBUG: Entered hit_api function." >&2 # Keep this debug
+    local method=$1
+    local url=$2
+    local note=$3
+    local body=${4:-""}
+    local omit_auth=${5:-false}
+    local add_pii_header=${6:-false}
+    local force_protocol=${7:-""}
+    local content_type_override=${8:-""}
+
+    local user=$(rand_elem "${USERS[@]}")
+    local role=$(rand_elem "${ROLES[@]}")
+    local proto_header=$(rand_elem "${PROTOCOLS[@]}")
+    if [[ -n "$force_protocol" ]]; then
+        proto_header="$force_protocol"
+    fi
+    local content_type=${content_type_override:-"application/json"}
+
+    log_action "Attempting [$note] | Method: $method | URL: $url | User: $user | Role: $role | Protocol: $proto_header"
+    if [[ "$omit_auth" == "true" ]]; then log_action "  (Flag: Omitting Auth)"; fi
+    if [[ "$add_pii_header" == "true" ]]; then log_action "  (Flag: Adding PII Header)"; fi
+    if [[ "$content_type" != "application/json" ]]; then log_action "  (Flag: Content-Type: $content_type)"; fi
+
+    # Keep the rest of the function commented out for now
+    # local curl_args=(-s -i -k -X "$method")
+    # ... rest of curl execution and parsing ...
+
+    # For this step, just return 0 after logging the attempt
+    return 0
 }
-echo "DEBUG: hit_api function definition processed." >&2
+# echo "DEBUG: hit_api function definition processed." >&2 # Removed granular debug
 
 # --- Simulation Functions ---
 # These functions call hit_api.
@@ -439,18 +463,18 @@ while true; do
   fi
 
   echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2
-  # Changed the debug message content here
-  echo "DEBUG: About to increment REQUEST_COUNT." >&2
+  # echo "DEBUG: About to increment REQUEST_COUNT." >&2 # Removed granular debug
   # Using standard arithmetic expansion
   REQUEST_COUNT=$((REQUEST_COUNT + 1))
   RC_INCREMENT_EXIT_CODE=$?
-  echo "DEBUG: After increment attempt: REQUEST_COUNT is '$REQUEST_COUNT', Exit code of increment was $RC_INCREMENT_EXIT_CODE." >&2
+  # echo "DEBUG: After increment attempt: REQUEST_COUNT is '$REQUEST_COUNT', Exit code of increment was $RC_INCREMENT_EXIT_CODE." >&2 # Removed granular debug
 
   if [[ $RC_INCREMENT_EXIT_CODE -ne 0 ]]; then
     echo "ERROR: Failed to increment REQUEST_COUNT. Previous value was '$((REQUEST_COUNT - 1))'. Increment command exit code: $RC_INCREMENT_EXIT_CODE. Exiting." >&2
     exit 1
   fi
-  echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2
+  # echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2 # Removed granular debug
+  echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2 # Keep a single increment confirmation
 
 
   # Random delay between requests (e.g., 0.1 to 1 second)
@@ -472,9 +496,10 @@ while true; do
     DELAY_VALUE="0.5"
   fi
 
-  echo "DEBUG: DELAY_VALUE is '$DELAY_VALUE'. About to sleep." >&2
+  # echo "DEBUG: DELAY_VALUE is '$DELAY_VALUE'. About to sleep." >&2 # Removed granular debug
   if sleep "$DELAY_VALUE"; then
-    echo "DEBUG: Sleep for $DELAY_VALUE seconds completed." >&2
+    # echo "DEBUG: Sleep for $DELAY_VALUE seconds completed." >&2 # Removed granular debug
+    : # Do nothing on successful sleep
   else
     SLEEP_EXIT_CODE=$?
     echo "ERROR: sleep command failed with exit code $SLEEP_EXIT_CODE for delay '$DELAY_VALUE'. Continuing." >&2
