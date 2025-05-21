@@ -125,9 +125,14 @@ generate_uuid() {
 
 # Function to log actions to console and file
 log_action() {
+  # Debug: Indicate log_action was called
+  echo "DEBUG: log_action called with: $1" >&2
   # Use printf for better formatting control and to avoid potential echo interpretation issues
   printf "%s [+] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$LOG"
+  # Debug: Indicate log_action finished
+  echo "DEBUG: log_action for '$1' completed." >&2
 }
+
 
 # Function to generate realistic-looking JSON payload
 get_realistic_payload() {
@@ -333,4 +338,3 @@ hit_api() {
     log_action "  Response Body:\n${response_body}"
     echo "" | tee -a "$LOG"
 }
-
