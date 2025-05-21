@@ -364,7 +364,7 @@ function hit_api { # NOSONAR
             else
                 response_body+="$line"$'\n'
             fi
-        done < <(echo "$raw_output")
+        done <<< "$raw_output" # Reverted to here-string
 
         # Final check for status_code if not found via -w (should be rare now)
         if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
