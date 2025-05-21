@@ -268,114 +268,182 @@ echo "DEBUG: All Helper Functions defined." >&2
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
-echo "DEBUG: Defining hit_api function." >&2
-hit_api() {
-    echo "DEBUG: Entered hit_api function. (Attempt 1)" >&2
-    # local method=$1
-    # local url=$2
-    # local note=$3
-    # local body=${4:-""}
-    # local omit_auth=${5:-false}
-    # local add_pii_header=${6:-false}
-    # local force_protocol=${7:-""}
-    # local content_type_override=${8:-""}
-
-    # echo "DEBUG: Entered hit_api function." >&2 # This was the previous debug line that wasn't reached
-    # local user=$(rand_elem "${USERS[@]}")
-    # local role=$(rand_elem "${ROLES[@]}")
-    # local proto_header=$(rand_elem "${PROTOCOLS[@]}")
-    # if [[ -n "$force_protocol" ]]; then
-    #     proto_header="$force_protocol"
-    # fi
-    # local content_type=${content_type_override:-"application/json"}
-
-    log_action "Attempting [$note] | Method: $method | URL: $url | User: $user | Role: $role | Protocol: $proto_header"
-    if [[ "$omit_auth" == "true" ]]; then log_action "  (Flag: Omitting Auth)"; fi
-    if [[ "$add_pii_header" == "true" ]]; then log_action "  (Flag: Adding PII Header)"; fi
-    if [[ "$content_type" != "application/json" ]]; then log_action "  (Flag: Content-Type: $content_type)"; fi
-
-    local curl_args=(-s -i -k -X "$method")
-
-    local header_args=()
-    mapfile -t header_args < <(build_headers_args_list "$user" "$role" "$proto_header" "$omit_auth" "$add_pii_header" "$content_type")
-
-    if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
-        header_args+=("-H")
-        header_args+=("Host: $CUSTOM_HOST_HEADER")
-    fi
-
-    curl_args+=("${header_args[@]}")
-
-    if [[ -n "$body" ]]; then
-        curl_args+=(-d "$body")
-        log_action "  Request Body: $body"
-    fi
-
-    curl_args+=("$url")
-    curl_args+=(-w "%{http_code}")
-
-    printf -v cmd_str_log "curl %q " "${curl_args[@]}"
-
-    local raw_output exit_code
-    raw_output=$(curl "${curl_args[@]}" 2>&1)
-    exit_code=$?
-
-    if [[ $exit_code -ne 0 && $exit_code -ne 22 ]]; then
-        log_action "  ERROR: curl command failed with exit code $exit_code for $method $url."
-        log_action "  Executed command approx: $cmd_str_log"
-        log_action "  Curl output (if any): $raw_output"
-        return 1
-    fi
-
-    local response_headers=""
-    local response_body=""
-    local status_code=""
-    local headers_done=false
-    local line_num=0
-    local http_status_line=""
-
-    while IFS= read -r line; do
-        ((line_num++))
-        line=${line%$'\r'}
-
-        if [[ "$line" =~ [^0-9]*([0-9]+)[^0-9]*$ ]]; then
-            status_code="${BASH_REMATCH[1]}"
-            continue
-        fi
-
-        if [[ "$headers_done" == false ]]; then
-            if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
-                http_status_line="$line"
-                continue
-            fi
-            if [[ -z "$line" ]]; then
-                headers_done=true
-            else
-                response_headers+="$line"$'\n'
-            fi
-        else
-            response_body+="$line"$'\n'
-        fi
-    done <<< "$raw_output"
-
-    if ! [[ "$status_code" =~ ^[0-9]+$ ]]; then
-        if [[ -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
-            status_code="${BASH_REMATCH[1]}"
-            log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line."
-        else
-            log_action "  ERROR: Failed to parse valid HTTP status code from curl output."
-            log_action "  Curl exit code was $exit_code."
-            log_action "  Raw Output was:\n$raw_output"
-            return 1
-        fi
-    fi
-
-    response_body=${response_body%$'\n'}
-
-    log_action "  Request Headers Args Used:\n${header_args[*]}"
-    log_action "  Response Status: $status_code"
-    printf "  Response Headers:\n%s" "$response_headers" | tee -a "$LOG"
-    log_action ""
-    log_action "  Response Body:\n${response_body}"
-    echo "" | tee -a "$LOG"
+echo "DEBUG: About to define hit_api function using 'function hit_api {' syntax." >&2
+function hit_api {
+  echo "DEBUG: Entered hit_api function (minimal, alternative syntax)." >&2
+  # Function body is intentionally almost empty for this test.
+  # The original content of hit_api is commented out or removed for this specific debug step.
+  # We are only testing if the function definition can be parsed and the function entered.
+  return 0 # Ensure it returns successfully if entered
 }
+echo "DEBUG: hit_api function definition processed." >&2
+
+# --- Simulation Functions ---
+# These functions call hit_api.
+echo "DEBUG: Defining Simulation Functions." >&2
+
+# Simulate valid user traffic
+simulate_valid_traffic() {
+  local api_group_name=$1
+  shift
+  local endpoints_array_name="$1[@]"
+  local endpoints=("${!endpoints_array_name}")
+  local endpoint_template=$(rand_elem "${endpoints[@]}")
+  local endpoint=${endpoint_template/\{id\}/$(generate_uuid)}
+  local method=$(rand_elem "GET" "POST" "PUT" "DELETE") # Common methods for valid traffic
+  local payload=""
+  if [[ "$method" == "POST" || "$method" == "PUT" ]]; then
+    payload=$(get_realistic_payload "$api_group_name")
+  fi
+  hit_api "$method" "$HOST$endpoint" "Valid $api_group_name Traffic" "$payload"
+}
+echo "DEBUG: simulate_valid_traffic function defined." >&2
+
+# Simulate governance policy violations
+simulate_governance_violation() {
+  local endpoint_template=$(rand_elem "${GOVERNANCE_ENDPOINTS[@]}")
+  local endpoint=${endpoint_template/\{id\}/$(generate_uuid)}
+  local method=$(rand_elem "${METHODS[@]}")
+  local note="Governance Violation"
+  local add_pii=false
+  local omit_auth_flag=false
+  local force_proto=""
+  local content_type_override=""
+
+  # Specific violation scenarios
+  if [[ "$endpoint" == *"/open-registration"* ]]; then
+    note="Open Registration Attempt"
+    # No specific payload needed, just hit the endpoint
+  elif [[ "$endpoint" == *"/insecure-cookies"* ]]; then
+    note="Testing Insecure Cookies (no specific client action, server-side check)"
+  elif [[ "$endpoint" == *"/hr/posture/headers"* ]]; then
+    note="HR Missing Security Headers (server-side check)"
+  elif [[ "$endpoint" == *"/hr/posture/methods"* ]]; then
+    note="HR Unrestricted HTTP Methods"
+    method=$(rand_elem "TRACE" "CONNECT" "TRACK") # Less common, potentially problematic methods
+  elif [[ "$endpoint" == *"/finance/posture/leaky-headers"* ]]; then
+    note="Finance Leaky Headers (server-side check)"
+    add_pii=true # Simulate client sending something that might be reflected if server is leaky
+  elif [[ "$endpoint" == *"/finance/posture/missing-auth"* ]]; then
+    note="Finance Missing Auth"
+    omit_auth_flag=true
+  elif [[ "$endpoint" == *"/products/posture/unencrypted-endpoint"* ]]; then
+    note="Products Unencrypted Endpoint"
+    force_proto="HTTP" # Force HTTP if HOST is HTTPS
+  elif [[ "$endpoint" == *"/products/posture/missing-csp"* ]]; then
+    note="Products Missing CSP (server-side check)"
+  elif [[ "$endpoint" == *"/banking/posture/cleartext-auth"* ]]; then
+    note="Banking Cleartext Auth"
+    # Simulate sending credentials in a way that might be cleartext if not HTTPS
+    # For this test, we'll just hit the endpoint; actual cleartext depends on transport
+  elif [[ "$endpoint" == *"/banking/posture/missing-headers"* ]]; then
+    note="Banking Missing Security Headers (server-side check)"
+  fi
+
+  hit_api "$method" "$HOST$endpoint" "$note" "" "$omit_auth_flag" "$add_pii" "$force_proto" "$content_type_override"
+}
+echo "DEBUG: simulate_governance_violation function defined." >&2
+
+# Simulate OWASP API Top 10 patterns
+simulate_owasp_attack() {
+  local endpoint_template=$(rand_elem "${OWASP_ENDPOINTS[@]}")
+  local endpoint=${endpoint_template/\{id\}/$(generate_uuid)}
+  local method=$(rand_elem "${METHODS[@]}")
+  local payload=""
+  local note="OWASP Attack"
+  local content_type_override=""
+
+  if [[ "$endpoint" == *"/OWASP1/"* ]]; then note="OWASP1 Broken Object Level Auth"; fi
+  if [[ "$endpoint" == *"/OWASP2/"* ]]; then note="OWASP2 Broken Authentication"; fi
+  if [[ "$endpoint" == *"/OWASP3/"* ]]; then note="OWASP3 Excessive Data Exposure"; fi
+  if [[ "$endpoint" == *"/OWASP4/"* ]]; then note="OWASP4 Lack of Resources & Rate Limiting"; fi
+  if [[ "$endpoint" == *"/OWASP5/"* ]]; then note="OWASP5 Broken Function Level Auth"; fi
+  if [[ "$endpoint" == *"/OWASP6/"* ]]; then note="OWASP6 Mass Assignment"; payload='{"isAdmin":true,"userId":"attacker"}'; fi
+  if [[ "$endpoint" == *"/OWASP7/"* ]]; then note="OWASP7 Security Misconfiguration"; fi
+  if [[ "$endpoint" == *"/OWASP8/"* || "$endpoint" == *"/OWASP10/"* ]]; then
+    note="OWASP8 Injection / OWASP10 Unsafe Consumption"
+    payload=$(get_malicious_payload)
+    # Randomly choose a less common content type for some injection tests
+    if (( RANDOM % 3 == 0 )); then content_type_override="application/xml"; fi
+    if (( RANDOM % 3 == 1 )); then content_type_override="text/plain"; fi
+  fi
+  if [[ "$endpoint" == *"/OWASP9/"* ]]; then note="OWASP9 Improper Assets Management (Shadow API)"; fi
+
+
+  hit_api "$method" "$HOST$endpoint" "$note" "$payload" false false "" "$content_type_override"
+}
+echo "DEBUG: simulate_owasp_attack function defined." >&2
+
+# Simulate Shadow/Zombie API traffic
+simulate_shadow_zombie_traffic() {
+  local endpoint=$(rand_elem "${SHADOW_ZOMBIE_ENDPOINTS[@]}")
+  local method=$(rand_elem "${METHODS[@]}")
+  local payload=""
+  if [[ "$method" == "POST" || "$method" == "PUT" ]]; then
+    payload=$(get_realistic_payload "generic")
+  fi
+  hit_api "$method" "$HOST$endpoint" "Shadow/Zombie API Traffic" "$payload"
+}
+echo "DEBUG: simulate_shadow_zombie_traffic function defined." >&2
+echo "DEBUG: All Simulation Functions defined." >&2
+
+# --- Main Simulation Loop ---
+echo "DEBUG: Script has reached the Main Simulation Loop section." >&2
+START_TIME=$(date +%s)
+echo "DEBUG: START_TIME set to $START_TIME" >&2
+echo "DEBUG: LOG file path is $LOG" >&2
+
+# Ensure log file is writable, create if not exists (tee -a will do this, but good to be explicit for first log)
+echo "DEBUG: Attempting to touch log file: $LOG" >&2
+touch "$LOG" || { echo "ERROR: Cannot create or touch log file $LOG. Exiting." >&2; exit 1; }
+echo "DEBUG: Log file touched successfully (or already existed)." >&2
+
+log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Target: $HOST. Log file: $LOG"
+if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
+  log_action "Using custom Host header: $CUSTOM_HOST_HEADER"
+fi
+
+# Counter for requests
+echo "DEBUG: Initializing REQUEST_COUNT." >&2
+REQUEST_COUNT=0
+
+while true; do
+  echo "DEBUG: Top of main while loop. REQUEST_COUNT: $REQUEST_COUNT" >&2
+  CURRENT_TIME=$(date +%s)
+  ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+
+  if [[ $ELAPSED_TIME -ge $DURATION_SECONDS ]]; then
+    log_action "Duration of $DURATION_SECONDS seconds reached. Exiting."
+    break
+  fi
+
+  # Randomly select a simulation type
+  SIM_TYPE=$((RANDOM % 100))
+  echo "DEBUG: SIM_TYPE is $SIM_TYPE" >&2
+
+  if [[ $SIM_TYPE -lt 50 ]]; then # 50% Valid Traffic
+    API_GROUP_CHOICE=$((RANDOM % 5))
+    case $API_GROUP_CHOICE in
+      0) simulate_valid_traffic "eshop" ESHOP_API_ENDPOINTS ;;
+      1) simulate_valid_traffic "hr" HR_API_ENDPOINTS ;;
+      2) simulate_valid_traffic "finance" FINANCE_API_ENDPOINTS ;;
+      3) simulate_valid_traffic "products" PRODUCTS_API_ENDPOINTS ;;
+      4) simulate_valid_traffic "banking" BANKING_API_ENDPOINTS ;;
+    esac
+  elif [[ $SIM_TYPE -lt 70 ]]; then # 20% Governance Violations
+    simulate_governance_violation
+  elif [[ $SIM_TYPE -lt 90 ]]; then # 20% OWASP Attacks
+    simulate_owasp_attack
+  else # 10% Shadow/Zombie API Traffic
+    simulate_shadow_zombie_traffic
+  fi
+
+  ((REQUEST_COUNT++))
+  # Random delay between requests (e.g., 0.1 to 1 second)
+  DELAY=$(awk -v min=0.1 -v max=1.0 'BEGIN{srand(); print min+rand()*(max-min)}')
+  echo "DEBUG: Sleeping for $DELAY seconds." >&2
+  sleep "$DELAY"
+done
+
+log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
+echo "DEBUG: Script finished successfully." >&2
