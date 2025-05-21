@@ -327,16 +327,16 @@ function hit_api { # NOSONAR
     echo "DEBUG: Attempting to proceed past printf." >&2
 
     # Parse headers, body, and status code from raw_output
-    # local response_headers="" # Temporarily commented out
-    # local response_body=""    # Temporarily commented out
-    # local status_code=""      # Temporarily commented out
-    # local headers_done=false  # Temporarily commented out
-    # local line_num=0          # Temporarily commented out
-    # local http_status_line="" # Temporarily commented out
+    local response_headers="" # UNCOMMENTED
+    local response_body=""    # UNCOMMENTED
+    local status_code=""      # UNCOMMENTED
+    local headers_done=false  # UNCOMMENTED
+    local line_num=0          # UNCOMMENTED
+    local http_status_line="" # UNCOMMENTED
 
-    # if [[ -n "$raw_output" ]]; then # Temporarily commented out
-        # Minimal processing for now
-        local status_code="XXX" # Placeholder
+    if [[ -n "$raw_output" ]]; then # UNCOMMENTED
+        # local status_code="XXX" # Placeholder - REMOVE THIS LINE
+
         # Read line by line, handling CR characters
         while IFS= read -r line; do
             line=${line%$'\r'} # Remove trailing CR if present
@@ -373,12 +373,11 @@ function hit_api { # NOSONAR
             log_action "  ERROR: Failed to parse HTTP status code from curl output (loop processed). Raw output was:\n$raw_output"
             status_code="000" # Assign a non-standard code to indicate parsing failure
         fi
-        local response_body="(Parsing temporarily disabled)" # Placeholder
-        local response_headers="(Parsing temporarily disabled)" # Placeholder
-    # else # Temporarily commented out
-    #     log_action "  WARNING: Raw curl output was empty. Skipping parsing." # Temporarily commented out
-    #     status_code="000" # Indicate an issue # Temporarily commented out
-    # fi # Temporarily commented out
+        response_body=${response_body%$'\n'} # Remove last newline from body if present - UNCOMMENTED
+    else # UNCOMMENTED
+        log_action "  WARNING: Raw curl output was empty. Skipping parsing." # UNCOMMENTED
+        status_code="000" # Indicate an issue # UNCOMMENTED
+    fi # UNCOMMENTED
 
     log_action "  Response Status: $status_code"
     # Log headers if any were captured
