@@ -36,8 +36,18 @@ else
   echo "ERROR: 'date' command NOT found in PATH. This is unexpected." >&2
 fi
 
+echo "DEBUG: About to define LOG variable using date." >&2
+DATE_FOR_LOG=$(date '+%Y-%m-%d_%H-%M-%S')
+DATE_FOR_LOG_EXIT_CODE=$?
+
+if [[ $DATE_FOR_LOG_EXIT_CODE -ne 0 ]]; then
+  echo "ERROR: 'date' command failed with exit code $DATE_FOR_LOG_EXIT_CODE when generating timestamp for LOG variable. Output: '$DATE_FOR_LOG'. Exiting." >&2
+  exit 1
+fi
+
 # Log File: Timestamped log file in /tmp
-LOG=/tmp/api_tester_$(date '+%Y-%m-%d_%H-%M-%S').log
+LOG="/tmp/api_tester_${DATE_FOR_LOG}.log"
+echo "DEBUG: LOG variable defined as: $LOG" >&2
 # Duration: How long the script should run in seconds
 DURATION_SECONDS=180
 
