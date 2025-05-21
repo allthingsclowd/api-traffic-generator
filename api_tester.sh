@@ -324,15 +324,19 @@ function hit_api { # NOSONAR
         # For now, let's log and attempt to continue with parsing if raw_output might still be usable
     fi
 
-    # Parse headers, body, and status code from raw_output
-    local response_headers=""
-    local response_body=""
-    local status_code=""
-    local headers_done=false
-    local line_num=0
-    local http_status_line=""
+    echo "DEBUG: Attempting to proceed past printf." >&2
 
-    if [[ -n "$raw_output" ]]; then
+    # Parse headers, body, and status code from raw_output
+    # local response_headers="" # Temporarily commented out
+    # local response_body=""    # Temporarily commented out
+    # local status_code=""      # Temporarily commented out
+    # local headers_done=false  # Temporarily commented out
+    # local line_num=0          # Temporarily commented out
+    # local http_status_line="" # Temporarily commented out
+
+    # if [[ -n "$raw_output" ]]; then # Temporarily commented out
+        # Minimal processing for now
+        local status_code="XXX" # Placeholder
         # Read line by line, handling CR characters
         while IFS= read -r line; do
             line=${line%$'\r'} # Remove trailing CR if present
@@ -369,11 +373,12 @@ function hit_api { # NOSONAR
             log_action "  ERROR: Failed to parse HTTP status code from curl output (loop processed). Raw output was:\n$raw_output"
             status_code="000" # Assign a non-standard code to indicate parsing failure
         fi
-        response_body=${response_body%$'\n'} # Remove last newline from body if present
-    else
-        log_action "  WARNING: Raw curl output was empty. Skipping parsing."
-        status_code="000" # Indicate an issue
-    fi
+        local response_body="(Parsing temporarily disabled)" # Placeholder
+        local response_headers="(Parsing temporarily disabled)" # Placeholder
+    # else # Temporarily commented out
+    #     log_action "  WARNING: Raw curl output was empty. Skipping parsing." # Temporarily commented out
+    #     status_code="000" # Indicate an issue # Temporarily commented out
+    # fi # Temporarily commented out
 
     log_action "  Response Status: $status_code"
     # Log headers if any were captured
@@ -575,4 +580,3 @@ done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
 echo "DEBUG: Script finished successfully." >&2
-
