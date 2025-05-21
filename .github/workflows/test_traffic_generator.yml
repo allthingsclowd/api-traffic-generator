@@ -21,21 +21,27 @@ jobs:
           docker run -d --name haproxy-test-instance -p 8080:80 -v ${{ github.workspace }}/haproxy_config:/usr/local/etc/haproxy:ro haproxy:latest
         working-directory: ${{ github.workspace }}
 
+      - name: Display HAProxy startup logs
+        if: always() # Run even if the docker run command in previous step failed, to capture potential error logs
+        run: |
+          echo "Attempting to display HAProxy container logs..."
+          docker logs haproxy-test-instance
+
       - name: Wait for HAProxy to be ready
         run: |
           echo "Waiting for HAProxy to start..."
           sleep 10 # Initial delay for HAProxy to initialize
-          timeout 30s bash -c 'until curl -sSf http://localhost:8080/eshop/products > /dev/null; do echo "Waiting for HAProxy response on /eshop/products..."; sleep 2; done'
+          timeout 30s bash -c 'until curl -sSf http://127.0.0.1:8080/eshop/products > /dev/null; do echo "Waiting for HAProxy response on /eshop/products..."; sleep 2; done'
           echo "HAProxy is responding."
           echo "Checking HAProxy on / (should be a default backend or error, but confirms service is up)"
-          curl -I http://localhost:8080 || echo "Curl to / failed but continuing, main test is specific endpoints."
+          curl -I http://127.0.0.1:8080 || echo "Curl to / failed but continuing, main test is specific endpoints."
           echo "Checking HAProxy on a known backend /eshop/products"
-          curl -I http://localhost:8080/eshop/products
+          curl -I http://127.0.0.1:8080/eshop/products
 
       - name: Run the traffic generator script
         run: |
           chmod +x api_tester.sh
-          ./api_tester.sh http://localhost:8080
+          ./api_tester.sh http://127.0.0.1:8080
         working-directory: ${{ github.workspace }}
 
       - name: Verify script execution (implicit)
