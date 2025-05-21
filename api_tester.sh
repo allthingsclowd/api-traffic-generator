@@ -398,7 +398,7 @@ echo "DEBUG: Attempting to touch log file: $LOG" >&2
 touch "$LOG" || { echo "ERROR: Cannot create or touch log file $LOG. Exiting." >&2; exit 1; }
 echo "DEBUG: Log file touched successfully (or already existed)." >&2
 
-log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Target: $HOST. Log file: $LOG"
+log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Target: http://localhost:80. Log file: $LOG"
 if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
   log_action "Using custom Host header: $CUSTOM_HOST_HEADER"
 fi
@@ -438,9 +438,20 @@ while true; do
     simulate_shadow_zombie_traffic
   fi
 
-  echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2 # New debug line
-  ((REQUEST_COUNT++))
-  echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2
+  echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2
+  # Changed the debug message content here
+  echo "DEBUG: About to increment REQUEST_COUNT." >&2
+  # Using standard arithmetic expansion
+  REQUEST_COUNT=$((REQUEST_COUNT + 1))
+  RC_INCREMENT_EXIT_CODE=$?
+  echo "DEBUG: After increment attempt: REQUEST_COUNT is '$REQUEST_COUNT', Exit code of increment was $RC_INCREMENT_EXIT_CODE." >&2
+
+  if [[ $RC_INCREMENT_EXIT_CODE -ne 0 ]]; then
+    echo "ERROR: Failed to increment REQUEST_COUNT. Previous value was '$((REQUEST_COUNT - 1))'. Increment command exit code: $RC_INCREMENT_EXIT_CODE. Exiting." >&2
+    exit 1
+  fi
+  echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2
+
 
   # Random delay between requests (e.g., 0.1 to 1 second)
   echo "DEBUG: About to calculate DELAY using awk." >&2
@@ -460,7 +471,7 @@ while true; do
     echo "ERROR: 'awk' command NOT found in PATH. Using default delay 0.5s." >&2
     DELAY_VALUE="0.5"
   fi
-  
+
   echo "DEBUG: DELAY_VALUE is '$DELAY_VALUE'. About to sleep." >&2
   if sleep "$DELAY_VALUE"; then
     echo "DEBUG: Sleep for $DELAY_VALUE seconds completed." >&2
@@ -473,4 +484,3 @@ done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
 echo "DEBUG: Script finished successfully." >&2
-
