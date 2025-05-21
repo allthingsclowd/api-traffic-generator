@@ -11,8 +11,6 @@
 # --- Configuration ---
 set -euo pipefail # Exit on error, undefined variable, or pipe failure
 
-# echo "DEBUG: api_tester.sh started. set -euo pipefail executed." >&2 # Removed granular debug
-
 # Target Host: Default to http://localhost if no argument is provided
 # Enhanced Target Host Handling
 if [[ $# -eq 2 ]]; then
@@ -23,20 +21,13 @@ else
   CUSTOM_HOST_HEADER=""
 fi
 
-# echo "DEBUG: HOST is '$HOST', CUSTOM_HOST_HEADER is '$CUSTOM_HOST_HEADER'. About to define LOG." >&2 # Removed granular debug
-
-# Explicitly test the date command
-# echo "DEBUG: Testing 'date' command availability and execution..." >&2 # Removed granular debug
 if command -v date >/dev/null 2>&1; then
-  # echo "DEBUG: 'date' command found in PATH." >&2 # Removed granular debug
   DATE_OUTPUT=$(date '+%Y-%m-%d_%H-%M-%S')
   DATE_EXIT_CODE=$?
-  # echo "DEBUG: 'date' command executed. Exit code: $DATE_EXIT_CODE. Output: '$DATE_OUTPUT'" >&2 # Removed granular debug
 else
   echo "ERROR: 'date' command NOT found in PATH. This is unexpected." >&2
 fi
 
-# echo "DEBUG: About to define LOG variable using date." >&2 # Removed granular debug
 DATE_FOR_LOG=$(date '+%Y-%m-%d_%H-%M-%S')
 DATE_FOR_LOG_EXIT_CODE=$?
 
@@ -47,13 +38,11 @@ fi
 
 # Log File: Timestamped log file in /tmp
 LOG="/tmp/api_tester_${DATE_FOR_LOG}.log"
-# echo "DEBUG: LOG variable defined as: $LOG" >&2 # Removed granular debug
 # Duration: How long the script should run in seconds
 DURATION_SECONDS=180
-# echo "DEBUG: DURATION_SECONDS defined as $DURATION_SECONDS" >&2 # Removed granular debug
 
 # --- API Endpoint Definitions ---
-# (Endpoint definitions remain the same as version 3.0.0)
+echo "DEBUG: API Endpoint Definitions arrays defined." >&2
 # Regular Endpoints (Used for Valid Traffic)
 ESHOP_API_ENDPOINTS=(
   "/products" "/orders" "/users" "/addresses" "/payments" "/cart" "/wishlist" "/notifications"
@@ -104,7 +93,6 @@ SHADOW_ZOMBIE_ENDPOINTS=(
   "/internal/v1/debug/status"        # Potential shadow internal API
 )
 
-echo "DEBUG: API Endpoint Definitions arrays defined." >&2
 # --- Simulation Parameters ---
 USERS=("alice" "bob" "carol" "eve" "guest" "attacker")
 ROLES=("user" "admin" "auditor" "guest" "anonymous")
@@ -133,7 +121,6 @@ MALICIOUS_PAYLOADS=(
   "$(head -c 1024 /dev/urandom | base64)"
 )
 
-# echo "DEBUG: Simulation Parameters arrays defined." >&2 # Removed granular debug
 # --- Helper Functions ---
 echo "DEBUG: Entering Helper Functions definitions section." >&2
 
@@ -143,7 +130,6 @@ rand_elem() {
   local index=$((RANDOM % ${#arr[@]}))
   echo "${arr[$index]}"
 }
-# echo "DEBUG: rand_elem function defined." >&2 # Removed granular debug
 
 # Function to generate a random UUID
 generate_uuid() {
@@ -153,7 +139,6 @@ generate_uuid() {
     head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32
   fi
 }
-# echo "DEBUG: generate_uuid function defined." >&2 # Removed granular debug
 
 # Function to log actions to console and file
 log_action() {
@@ -164,7 +149,6 @@ log_action() {
   # Debug: Indicate log_action finished
   echo "DEBUG: log_action for '$1' completed." >&2
 }
-# echo "DEBUG: log_action function defined." >&2 # Removed granular debug
 
 
 # Function to generate realistic-looking JSON payload
@@ -189,7 +173,6 @@ get_realistic_payload() {
       ;;
   esac
 }
-# echo "DEBUG: get_realistic_payload function defined." >&2 # Removed granular debug
 
 # Function to generate intentionally malformed or injectable payloads
 get_malicious_payload() {
@@ -206,7 +189,6 @@ get_malicious_payload() {
         fi
     fi
 }
-# echo "DEBUG: get_malicious_payload function defined." >&2 # Removed granular debug
 
 # Function to build curl header arguments (outputs one argument per line)
 build_headers_args_list() {
@@ -251,7 +233,6 @@ build_headers_args_list() {
     echo "X-Leaked-Data: $pii_header_val"
   fi
 }
-# echo "DEBUG: build_headers_args_list function defined." >&2 # Removed granular debug
 
 # Function to send API requests with specific content types
 send_api_with_payload() {
@@ -263,14 +244,12 @@ send_api_with_payload() {
 
     hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
-# echo "DEBUG: send_api_with_payload function defined." >&2 # Removed granular debug
 echo "DEBUG: All Helper Functions defined." >&2
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
-# echo "DEBUG: About to define hit_api function using 'function hit_api {' syntax." >&2 # Removed granular debug
 function hit_api { # NOSONAR
-    echo "DEBUG: Entered hit_api function." >&2 # Keep this debug
+    echo "DEBUG: Entered hit_api function." >&2
     local method=$1
     local url=$2
     local note=$3
@@ -353,49 +332,39 @@ function hit_api { # NOSONAR
     # Parse headers, body, and status code from raw_output
     local response_headers=""
     local response_body=""
-    local status_code="" # This will be extracted from the last line if -w worked
+    local status_code=""
     local headers_done=false
     local line_num=0
-    local http_status_line="" # To capture the first line like "HTTP/1.1 200 OK"
+    local http_status_line=""
 
     # Read line by line, handling CR characters
     while IFS= read -r line; do
         line=${line%$'\r'} # Remove trailing CR if present
-        # echo "DEBUG PARSING: line_num=$line_num, line='${line}'" >&2 # Removed
-        # echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'" >&2 # Removed
-        ((line_num++)) # || echo "ERROR PARSING: Failed to increment line_num. Exit code $?. Current line_num: '$line_num' (before potential failed increment)" >&2 # Removed
-        # echo "DEBUG PARSING: line_num after increment: '$line_num'" >&2 # Removed
+        ((line_num++))
 
         if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
-            # echo "DEBUG PARSING: Matched HTTP_STATUS_CODE line. BASH_REMATCH[0]='${BASH_REMATCH[0]}', BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Removed
             if [[ -n "${BASH_REMATCH[1]}" ]]; then
                 status_code="${BASH_REMATCH[1]}"
-            else
-                echo "DEBUG PARSING: WARNING - BASH_REMATCH[1] is empty despite regex match for HTTP_STATUS_CODE line." >&2
             fi
-            continue # This should be the last line from curl's main output due to -w
+            continue
         fi
 
         if [[ "$headers_done" == false ]]; then
-            if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then # First line is HTTP status
+            if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
                 http_status_line="$line"
-                # Try to extract status code from here as a fallback
                 if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
-                    # echo "DEBUG PARSING: Fallback status code from HTTP status line. BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Removed
                     status_code="${BASH_REMATCH[1]}"
-                    # echo "DEBUG PARSING: Fallback status_code set to '$status_code'" >&2 # Removed
                 fi
-            elif [[ -z "$line" ]]; then # Empty line signifies end of headers
+            elif [[ -z "$line" ]]; then
                 headers_done=true
             else
                 response_headers+="$line"$'\n'
             fi
-        else # After headers_done is true, it's the body
+        else
             response_body+="$line"$'\n'
         fi
-    done <<< "$raw_output"
+    done < <(echo "$raw_output") # Changed from here-string to process substitution with echo
 
-    # echo "DEBUG PARSING: Loop finished. status_code='${status_code}'" >&2 # Removed
     # Final check for status_code if not found via -w (should be rare now)
     if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
         status_code="${BASH_REMATCH[1]}"
@@ -418,10 +387,8 @@ function hit_api { # NOSONAR
     log_action "  Response Body:\n${response_body}" # Log body even if empty
     echo "" | tee -a "$LOG" # Ensure a blank line after body in the main log
 }
-# echo "DEBUG: hit_api function definition processed." >&2 # Removed granular debug
 
 # --- Simulation Functions ---
-# These functions call hit_api.
 echo "DEBUG: Defining Simulation Functions." >&2
 
 # Simulate valid user traffic
@@ -455,29 +422,26 @@ simulate_governance_violation() {
   # Specific violation scenarios
   if [[ "$endpoint" == *"/open-registration"* ]]; then
     note="Open Registration Attempt"
-    # No specific payload needed, just hit the endpoint
   elif [[ "$endpoint" == *"/insecure-cookies"* ]]; then
     note="Testing Insecure Cookies (no specific client action, server-side check)"
   elif [[ "$endpoint" == *"/hr/posture/headers"* ]]; then
     note="HR Missing Security Headers (server-side check)"
   elif [[ "$endpoint" == *"/hr/posture/methods"* ]]; then
     note="HR Unrestricted HTTP Methods"
-    method=$(rand_elem "TRACE" "CONNECT" "TRACK") # Less common, potentially problematic methods
+    method=$(rand_elem "TRACE" "CONNECT" "TRACK")
   elif [[ "$endpoint" == *"/finance/posture/leaky-headers"* ]]; then
     note="Finance Leaky Headers (server-side check)"
-    add_pii=true # Simulate client sending something that might be reflected if server is leaky
+    add_pii=true
   elif [[ "$endpoint" == *"/finance/posture/missing-auth"* ]]; then
     note="Finance Missing Auth"
     omit_auth_flag=true
   elif [[ "$endpoint" == *"/products/posture/unencrypted-endpoint"* ]]; then
     note="Products Unencrypted Endpoint"
-    force_proto="HTTP" # Force HTTP if HOST is HTTPS
+    force_proto="HTTP"
   elif [[ "$endpoint" == *"/products/posture/missing-csp"* ]]; then
     note="Products Missing CSP (server-side check)"
   elif [[ "$endpoint" == *"/banking/posture/cleartext-auth"* ]]; then
     note="Banking Cleartext Auth"
-    # Simulate sending credentials in a way that might be cleartext if not HTTPS
-    # For this test, we'll just hit the endpoint; actual cleartext depends on transport
   elif [[ "$endpoint" == *"/banking/posture/missing-headers"* ]]; then
     note="Banking Missing Security Headers (server-side check)"
   fi
@@ -505,7 +469,6 @@ simulate_owasp_attack() {
   if [[ "$endpoint" == *"/OWASP8/"* || "$endpoint" == *"/OWASP10/"* ]]; then
     note="OWASP8 Injection / OWASP10 Unsafe Consumption"
     payload=$(get_malicious_payload)
-    # Randomly choose a less common content type for some injection tests
     if (( RANDOM % 3 == 0 )); then content_type_override="application/xml"; fi
     if (( RANDOM % 3 == 1 )); then content_type_override="text/plain"; fi
   fi
@@ -580,19 +543,8 @@ while true; do
     simulate_shadow_zombie_traffic
   fi
 
-  # echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2 # Removed
-  # echo "DEBUG: About to increment REQUEST_COUNT." >&2 # Removed granular debug
-  # Using standard arithmetic expansion
   REQUEST_COUNT=$((REQUEST_COUNT + 1))
-  RC_INCREMENT_EXIT_CODE=$?
-  # echo "DEBUG: After increment attempt: REQUEST_COUNT is '$REQUEST_COUNT', Exit code of increment was $RC_INCREMENT_EXIT_CODE." >&2 # Removed granular debug
-
-  # if [[ $RC_INCREMENT_EXIT_CODE -ne 0 ]]; then # This check is likely not needed anymore
-  #   echo "ERROR: Failed to increment REQUEST_COUNT. Previous value was '$((REQUEST_COUNT - 1))'. Increment command exit code: $RC_INCREMENT_EXIT_CODE. Exiting." >&2
-  #   exit 1
-  # fi
-  # echo "DEBUG: REQUEST_COUNT successfully incremented to $REQUEST_COUNT." >&2 # Removed granular debug
-  echo "DEBUG: REQUEST_COUNT is now $REQUEST_COUNT." >&2 # Simplified confirmation
+  echo "DEBUG: REQUEST_COUNT is now $REQUEST_COUNT." >&2
 
 
   # Random delay between requests (e.g., 0.1 to 1 second)
@@ -614,14 +566,11 @@ while true; do
     DELAY_VALUE="0.5"
   fi
 
-  # echo "DEBUG: DELAY_VALUE is '$DELAY_VALUE'. About to sleep." >&2 # Removed granular debug
   if sleep "$DELAY_VALUE"; then
-    # echo "DEBUG: Sleep for $DELAY_VALUE seconds completed." >&2 # Removed granular debug
     : # Do nothing on successful sleep
   else
     SLEEP_EXIT_CODE=$?
     echo "ERROR: sleep command failed with exit code $SLEEP_EXIT_CODE for delay '$DELAY_VALUE'. Continuing." >&2
-    # Optionally, you could exit here if sleep failure is critical: exit 1
   fi
 done
 
