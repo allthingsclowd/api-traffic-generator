@@ -90,6 +90,7 @@ SHADOW_ZOMBIE_ENDPOINTS=(
   "/shadow-api/undocumented"           # Example of an unknown API
   "/zombie-api/v1/resource"            # Example of an old, supposedly decommissioned API
   "/api/v1/users/legacy"              # Another potential zombie
+  "/eshop/catalog/products-beta"       # Explicitly test the drifted API endpoint
   "/internal/v1/debug/status"        # Potential shadow internal API
 )
 
