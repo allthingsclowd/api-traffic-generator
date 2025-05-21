@@ -26,6 +26,7 @@ jobs:
       - name: Start HAProxy container
         run: |
           docker run -d --name haproxy-test \
+            --user root \
             -v ${{ github.workspace }}/local_haproxy_config:/usr/local/etc/haproxy:ro \
             -p 80:80 \
             haproxy:latest
