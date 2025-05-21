@@ -439,10 +439,35 @@ while true; do
   fi
 
   ((REQUEST_COUNT++))
+  echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2
+
   # Random delay between requests (e.g., 0.1 to 1 second)
-  DELAY=$(awk -v min=0.1 -v max=1.0 'BEGIN{srand(); print min+rand()*(max-min)}')
-  echo "DEBUG: Sleeping for $DELAY seconds." >&2
-  sleep "$DELAY"
+  echo "DEBUG: About to calculate DELAY using awk." >&2
+  if command -v awk >/dev/null 2>&1; then
+    echo "DEBUG: 'awk' command found in PATH." >&2
+    DELAY_VALUE=$(awk -v min=0.1 -v max=1.0 'BEGIN{srand(); print min+rand()*(max-min)}')
+    AWK_EXIT_CODE=$?
+    echo "DEBUG: 'awk' command executed. Exit code: $AWK_EXIT_CODE. Output: '$DELAY_VALUE'" >&2
+    if [[ $AWK_EXIT_CODE -ne 0 ]]; then
+      echo "ERROR: awk command failed with exit code $AWK_EXIT_CODE. Using default delay 0.5s." >&2
+      DELAY_VALUE="0.5"
+    elif [[ -z "$DELAY_VALUE" ]]; then
+      echo "ERROR: awk command produced empty output. Using default delay 0.5s." >&2
+      DELAY_VALUE="0.5"
+    fi
+  else
+    echo "ERROR: 'awk' command NOT found in PATH. Using default delay 0.5s." >&2
+    DELAY_VALUE="0.5"
+  fi
+  
+  echo "DEBUG: DELAY_VALUE is '$DELAY_VALUE'. About to sleep." >&2
+  if sleep "$DELAY_VALUE"; then
+    echo "DEBUG: Sleep for $DELAY_VALUE seconds completed." >&2
+  else
+    SLEEP_EXIT_CODE=$?
+    echo "ERROR: sleep command failed with exit code $SLEEP_EXIT_CODE for delay '$DELAY_VALUE'. Continuing." >&2
+    # Optionally, you could exit here if sleep failure is critical: exit 1
+  fi
 done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
