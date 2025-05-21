@@ -362,7 +362,9 @@ function hit_api { # NOSONAR
     while IFS= read -r line; do
         line=${line%$'\r'} # Remove trailing CR if present
         echo "DEBUG PARSING: line_num=$line_num, line='${line}'" >&2 # Added debug
-        ((line_num++))
+        echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'" >&2
+        ((line_num++)) || echo "ERROR PARSING: Failed to increment line_num. Exit code $?. Current line_num: '$line_num' (before potential failed increment)" >&2
+        echo "DEBUG PARSING: line_num after increment: '$line_num'" >&2
 
         if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
             echo "DEBUG PARSING: Matched HTTP_STATUS_CODE line. BASH_REMATCH[0]='${BASH_REMATCH[0]}', BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Added debug
