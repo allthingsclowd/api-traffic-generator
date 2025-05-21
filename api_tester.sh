@@ -438,6 +438,7 @@ while true; do
     simulate_shadow_zombie_traffic
   fi
 
+  echo "DEBUG: Value of REQUEST_COUNT before increment: '$REQUEST_COUNT'" >&2 # New debug line
   ((REQUEST_COUNT++))
   echo "DEBUG: REQUEST_COUNT incremented to $REQUEST_COUNT." >&2
 
@@ -472,3 +473,4 @@ done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
 echo "DEBUG: Script finished successfully." >&2
+
