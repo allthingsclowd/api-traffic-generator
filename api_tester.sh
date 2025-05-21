@@ -11,6 +11,8 @@
 # --- Configuration ---
 set -euo pipefail # Exit on error, undefined variable, or pipe failure
 
+echo "DEBUG: api_tester.sh started. set -euo pipefail executed." >&2
+
 # Target Host: Default to http://localhost if no argument is provided
 # Enhanced Target Host Handling
 if [[ $# -eq 2 ]]; then
@@ -20,6 +22,9 @@ else
   HOST=${1:-http://localhost}
   CUSTOM_HOST_HEADER=""
 fi
+
+echo "DEBUG: HOST is '$HOST', CUSTOM_HOST_HEADER is '$CUSTOM_HOST_HEADER'. About to define LOG." >&2
+
 # Log File: Timestamped log file in /tmp
 LOG=/tmp/api_tester_$(date '+%Y-%m-%d_%H-%M-%S').log
 # Duration: How long the script should run in seconds
