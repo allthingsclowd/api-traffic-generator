@@ -313,21 +313,7 @@ function hit_api { # NOSONAR
     if [[ "$prev_set_e_state" == "enabled" ]]; then set -e; fi # Restore set -e
 
     echo "DEBUG: curl command finished. Exit code: $exit_code" >&2
-    echo "DEBUG: Raw curl output:\n$raw_output" >&2
-
-    # Handle curl exit codes
-    # Common successful exit is 0.
-    # Exit code 22: HTTP page not retrieved. "This is not an error." (e.g., 404, 500s)
-    # Exit code 28: Operation timeout.
-    # Exit code 18: Partial file.
-    # Exit code 60: Peer certificate cannot be authenticated with known CA certificates (should be mitigated by -k)
-    if [[ $exit_code -ne 0 && $exit_code -ne 22 && $exit_code -ne 18 && $exit_code -ne 28 && $exit_code -ne 60 ]]; then
-        log_action "  ERROR: curl command failed with unexpected exit code $exit_code for $method $url."
-        log_action "  Executed command approx: $cmd_str_log"
-        log_action "  Curl output (if any): $raw_output"
-    elif [[ $exit_code -eq 18 || $exit_code -eq 28 ]]; then
-        log_action "  WARNING: curl command for $method $url completed with exit code $exit_code (Timeout/Partial File). Output: $raw_output"
-    fi
+    printf "DEBUG: Raw curl output:\n%s\n" "$raw_output" >&2
 
     # Parse headers, body, and status code from raw_output
     local response_headers=""
