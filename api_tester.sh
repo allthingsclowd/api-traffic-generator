@@ -50,6 +50,7 @@ LOG="/tmp/api_tester_${DATE_FOR_LOG}.log"
 echo "DEBUG: LOG variable defined as: $LOG" >&2
 # Duration: How long the script should run in seconds
 DURATION_SECONDS=180
+echo "DEBUG: DURATION_SECONDS defined as $DURATION_SECONDS" >&2
 
 # --- API Endpoint Definitions ---
 # (Endpoint definitions remain the same as version 3.0.0)
@@ -103,6 +104,7 @@ SHADOW_ZOMBIE_ENDPOINTS=(
   "/internal/v1/debug/status"        # Potential shadow internal API
 )
 
+echo "DEBUG: API Endpoint Definitions arrays defined." >&2
 # --- Simulation Parameters ---
 USERS=("alice" "bob" "carol" "eve" "guest" "attacker")
 ROLES=("user" "admin" "auditor" "guest" "anonymous")
@@ -131,7 +133,9 @@ MALICIOUS_PAYLOADS=(
   "$(head -c 1024 /dev/urandom | base64)"
 )
 
+echo "DEBUG: Simulation Parameters arrays defined." >&2
 # --- Helper Functions ---
+echo "DEBUG: Entering Helper Functions definitions section." >&2
 
 # Function to choose a random element from an array
 rand_elem() {
@@ -139,6 +143,7 @@ rand_elem() {
   local index=$((RANDOM % ${#arr[@]}))
   echo "${arr[$index]}"
 }
+echo "DEBUG: rand_elem function defined." >&2
 
 # Function to generate a random UUID
 generate_uuid() {
@@ -148,6 +153,7 @@ generate_uuid() {
     head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32
   fi
 }
+echo "DEBUG: generate_uuid function defined." >&2
 
 # Function to log actions to console and file
 log_action() {
@@ -158,6 +164,7 @@ log_action() {
   # Debug: Indicate log_action finished
   echo "DEBUG: log_action for '$1' completed." >&2
 }
+echo "DEBUG: log_action function defined." >&2
 
 
 # Function to generate realistic-looking JSON payload
@@ -182,6 +189,7 @@ get_realistic_payload() {
       ;;
   esac
 }
+echo "DEBUG: get_realistic_payload function defined." >&2
 
 # Function to generate intentionally malformed or injectable payloads
 get_malicious_payload() {
@@ -198,6 +206,7 @@ get_malicious_payload() {
         fi
     fi
 }
+echo "DEBUG: get_malicious_payload function defined." >&2
 
 # Function to build curl header arguments (outputs one argument per line)
 build_headers_args_list() {
@@ -242,6 +251,7 @@ build_headers_args_list() {
     echo "X-Leaked-Data: $pii_header_val"
   fi
 }
+echo "DEBUG: build_headers_args_list function defined." >&2
 
 # Function to send API requests with specific content types
 send_api_with_payload() {
@@ -253,6 +263,8 @@ send_api_with_payload() {
 
     hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
+echo "DEBUG: send_api_with_payload function defined." >&2
+echo "DEBUG: All Helper Functions defined." >&2
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
