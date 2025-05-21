@@ -8,45 +8,50 @@ on:
 jobs:
   test_traffic_script:
     runs-on: ubuntu-latest
-    services:
-      haproxy:
-        image: haproxy:latest
-        volumes:
-          - ${{ github.workspace }}/haproxy_config:/usr/local/etc/haproxy:ro
-        # The service container's port 80 will be accessible to the job container.
-        # The job container can access it via "haproxy:80" or "localhost:80" (if mapped).
-        # For service-to-service communication or health checks run against the service,
-        # localhost inside the health check refers to the service container itself.
-        ports:
-          - 80:80 # Map host port 80 to container port 80 for consistency and health check via localhost
-        options: >-
-          --health-cmd "curl -f http://localhost:80/favicon.ico || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # Services block removed for HAProxy; it will be managed manually.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Prepare HAProxy configuration
         run: |
-          mkdir -p ${{ github.workspace }}/haproxy_config/icons
+          # This directory will be mounted into the HAProxy container
+          mkdir -p ${{ github.workspace }}/local_haproxy_config/icons
           # Copy the HAProxy configuration file from its specified location
-          cp ${{ github.workspace }}/.github/haproxy_files/haproxy.cfg ${{ github.workspace }}/haproxy_config/haproxy.cfg
+          cp ${{ github.workspace }}/.github/haproxy_files/haproxy.cfg ${{ github.workspace }}/local_haproxy_config/haproxy.cfg
           # Copy the new favicon from its specified location
-          cp ${{ github.workspace }}/.github/haproxy_files/icons/favicon32tp.png ${{ github.workspace }}/haproxy_config/icons/favicon32tp.png
+          cp ${{ github.workspace }}/.github/haproxy_files/icons/favicon32tp.png ${{ github.workspace }}/local_haproxy_config/icons/favicon32tp.png
         working-directory: ${{ github.workspace }}
 
-      # The old "Set up Docker and HAProxy", "Display HAProxy startup logs", and "Wait for HAProxy to be ready" steps are removed.
-      # The service container handles HAProxy startup and readiness via its health check.
-      # GitHub Actions ensures that steps only run after service containers are healthy.
+      - name: Start HAProxy container
+        run: |
+          docker run -d --name haproxy-test \
+            -v ${{ github.workspace }}/local_haproxy_config:/usr/local/etc/haproxy:ro \
+            -p 80:80 \
+            haproxy:latest
+
+      - name: Wait for HAProxy to be ready
+        run: |
+          echo "Waiting for HAProxy to be ready..."
+          for i in {1..30}; do # Wait up to 30 seconds (adjust as needed)
+            # Check if HAProxy is responding on the favicon path (or any other simple health check path)
+            if curl -sf http://localhost:80/favicon.ico > /dev/null; then
+              echo "HAProxy is ready."
+              docker logs haproxy-test # Optional: display HAProxy logs on success for debugging
+              exit 0
+            fi
+            echo -n "."
+            sleep 1
+          done
+          echo "HAProxy did not become ready in time."
+          docker logs haproxy-test # Display HAProxy logs on failure
+          exit 1
 
       - name: Run the traffic generator script
         run: |
           chmod +x api_tester.sh
-          # Service container is accessible via its name 'haproxy' on its exposed port (80)
-          # as defined in the services block and its ports mapping.
-          ./api_tester.sh http://haproxy:80
+          # HAProxy is accessible on localhost:80 due to port mapping in `docker run`
+          ./api_tester.sh http://localhost:80
         working-directory: ${{ github.workspace }}
 
       - name: Verify script execution (implicit)
@@ -120,5 +125,11 @@ jobs:
           path: |
             ${{ github.workspace }}/api_tester_output.log
             # Note: Accessing HAProxy logs from a service container is not as direct as 'docker logs'.
-            # If needed, HAProxy would have to be configured to log to a file in a mounted volume.
+            # For manually started containers, use 'docker logs <container_name>'
+            # We can capture them to a file if needed before cleanup, or rely on the output from the "Wait for HAProxy" step.
           retention-days: 7
+      - name: Stop and remove HAProxy container
+        if: always() # Ensure cleanup even if previous steps fail
+        run: |
+          docker stop haproxy-test || true # Allow to fail if already stopped
+          docker rm haproxy-test || true   # Allow to fail if already removed
