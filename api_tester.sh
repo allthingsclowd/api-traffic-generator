@@ -343,7 +343,7 @@ function hit_api { # NOSONAR
             echo "DEBUG PARSING: Top of while loop. line_num='$line_num'" >&2
             line=${line%$'\r'} # Remove trailing CR if present
             echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'. Line content: '${line}'" >&2
-            ((line_num++))
+            ((line_num++)) || true # Ensure set -e doesn't trip on ((0)) returning 1
             echo "DEBUG PARSING: Incremented line_num to '$line_num'." >&2
 
             if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
