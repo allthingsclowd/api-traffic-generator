@@ -51,11 +51,19 @@ jobs:
       - name: Run the traffic generator script
         run: |
           chmod +x api_tester.sh
+          echo "Current working directory: $(pwd)"
+          echo "Workspace location: ${{ github.workspace }}"
+          echo "Listing workspace contents before script run:"
+          ls -la ${{ github.workspace }}
           # HAProxy is accessible on localhost:80 due to port mapping in `docker run`.
           # Capture script output for debugging and save to a file in the workspace.
           # Use 'set -o pipefail' to ensure the step fails if any command in the pipe fails.
           set -o pipefail
-          ./api_tester.sh http://localhost:80 2>&1 | tee api_tester_console_output.log
+          echo "Attempting to run api_tester.sh and tee output to ${{ github.workspace }}/api_tester_console_output.log"
+          ./api_tester.sh http://localhost:80 2>&1 | tee "${{ github.workspace }}/api_tester_console_output.log"
+          echo "Script execution pipeline finished. Exit code of pipeline: $?"
+          echo "Listing workspace contents after script run:"
+          ls -la ${{ github.workspace }}
         working-directory: ${{ github.workspace }}
 
       - name: List /tmp contents after script run
