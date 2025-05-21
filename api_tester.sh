@@ -337,44 +337,48 @@ function hit_api { # NOSONAR
     local line_num=0
     local http_status_line=""
 
-    # Read line by line, handling CR characters
-    while IFS= read -r line; do
-        line=${line%$'\r'} # Remove trailing CR if present
-        ((line_num++))
+    if [[ -n "$raw_output" ]]; then
+        # Read line by line, handling CR characters
+        while IFS= read -r line; do
+            line=${line%$'\r'} # Remove trailing CR if present
+            ((line_num++))
 
-        if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
-            if [[ -n "${BASH_REMATCH[1]}" ]]; then
-                status_code="${BASH_REMATCH[1]}"
-            fi
-            continue
-        fi
-
-        if [[ "$headers_done" == false ]]; then
-            if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
-                http_status_line="$line"
-                if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+            if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
+                if [[ -n "${BASH_REMATCH[1]}" ]]; then
                     status_code="${BASH_REMATCH[1]}"
                 fi
-            elif [[ -z "$line" ]]; then
-                headers_done=true
-            else
-                response_headers+="$line"$'\n'
+                continue
             fi
-        else
-            response_body+="$line"$'\n'
+
+            if [[ "$headers_done" == false ]]; then
+                if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
+                    http_status_line="$line"
+                    if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+                        status_code="${BASH_REMATCH[1]}"
+                    fi
+                elif [[ -z "$line" ]]; then
+                    headers_done=true
+                else
+                    response_headers+="$line"$'\n'
+                fi
+            else
+                response_body+="$line"$'\n'
+            fi
+        done < <(echo "$raw_output")
+
+        # Final check for status_code if not found via -w (should be rare now)
+        if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+            status_code="${BASH_REMATCH[1]}"
+            log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line. -w output might have been missing."
+        elif [[ -z "$status_code" ]]; then
+            log_action "  ERROR: Failed to parse HTTP status code from curl output (loop processed). Raw output was:\n$raw_output"
+            status_code="000" # Assign a non-standard code to indicate parsing failure
         fi
-    done < <(echo "$raw_output") # Changed from here-string to process substitution with echo
-
-    # Final check for status_code if not found via -w (should be rare now)
-    if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
-        status_code="${BASH_REMATCH[1]}"
-        log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line. -w output might have been missing."
-    elif [[ -z "$status_code" ]]; then
-        log_action "  ERROR: Failed to parse HTTP status code from curl output. Raw output was:\n$raw_output"
-        status_code="000" # Assign a non-standard code to indicate parsing failure
+        response_body=${response_body%$'\n'} # Remove last newline from body if present
+    else
+        log_action "  WARNING: Raw curl output was empty. Skipping parsing."
+        status_code="000" # Indicate an issue
     fi
-
-    response_body=${response_body%$'\n'} # Remove last newline from body if present
 
     log_action "  Response Status: $status_code"
     # Log headers if any were captured
