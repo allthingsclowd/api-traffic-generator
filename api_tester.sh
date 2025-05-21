@@ -25,6 +25,17 @@ fi
 
 echo "DEBUG: HOST is '$HOST', CUSTOM_HOST_HEADER is '$CUSTOM_HOST_HEADER'. About to define LOG." >&2
 
+# Explicitly test the date command
+echo "DEBUG: Testing 'date' command availability and execution..." >&2
+if command -v date >/dev/null 2>&1; then
+  echo "DEBUG: 'date' command found in PATH." >&2
+  DATE_OUTPUT=$(date '+%Y-%m-%d_%H-%M-%S')
+  DATE_EXIT_CODE=$?
+  echo "DEBUG: 'date' command executed. Exit code: $DATE_EXIT_CODE. Output: '$DATE_OUTPUT'" >&2
+else
+  echo "ERROR: 'date' command NOT found in PATH. This is unexpected." >&2
+fi
+
 # Log File: Timestamped log file in /tmp
 LOG=/tmp/api_tester_$(date '+%Y-%m-%d_%H-%M-%S').log
 # Duration: How long the script should run in seconds
