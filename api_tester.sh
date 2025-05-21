@@ -268,6 +268,7 @@ echo "DEBUG: All Helper Functions defined." >&2
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
+echo "DEBUG: Defining hit_api function." >&2
 hit_api() {
     local method=$1
     local url=$2
@@ -278,6 +279,7 @@ hit_api() {
     local force_protocol=${7:-""}
     local content_type_override=${8:-""}
 
+    echo "DEBUG: Entered hit_api function." >&2
     local user=$(rand_elem "${USERS[@]}")
     local role=$(rand_elem "${ROLES[@]}")
     local proto_header=$(rand_elem "${PROTOCOLS[@]}")
