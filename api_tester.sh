@@ -313,7 +313,16 @@ function hit_api { # NOSONAR
     if [[ "$prev_set_e_state" == "enabled" ]]; then set -e; fi # Restore set -e
 
     echo "DEBUG: curl command finished. Exit code: $exit_code" >&2
+    
+    # Use printf for safer output of raw_output and check its exit code
     printf "DEBUG: Raw curl output:\n%s\n" "$raw_output" >&2
+    local printf_exit_code=$?
+    echo "DEBUG: printf for raw_output finished. Exit code: $printf_exit_code" >&2
+    if [[ $printf_exit_code -ne 0 ]]; then
+        echo "ERROR: printf command failed with exit code $printf_exit_code while printing raw_output. This is highly unusual." >&2
+        # Depending on the severity, you might choose to exit or try to continue
+        # For now, let's log and attempt to continue with parsing if raw_output might still be usable
+    fi
 
     # Parse headers, body, and status code from raw_output
     local response_headers=""
@@ -350,7 +359,7 @@ function hit_api { # NOSONAR
             else
                 response_body+="$line"$'\n'
             fi
-        done <<< "$raw_output" # Reverted to here-string
+        done <<< "$raw_output" # Using here-string
 
         # Final check for status_code if not found via -w (should be rare now)
         if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
@@ -566,3 +575,4 @@ done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
 echo "DEBUG: Script finished successfully." >&2
+
