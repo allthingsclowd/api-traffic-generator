@@ -335,12 +335,16 @@ function hit_api { # NOSONAR
     local http_status_line="" # UNCOMMENTED
 
     if [[ -n "$raw_output" ]]; then # UNCOMMENTED
+        echo "DEBUG PARSING: Entered 'if -n raw_output' block." >&2
         # local status_code="XXX" # Placeholder - REMOVE THIS LINE
 
         # Read line by line, handling CR characters
         while IFS= read -r line; do
+            echo "DEBUG PARSING: Top of while loop. line_num='$line_num'" >&2
             line=${line%$'\r'} # Remove trailing CR if present
+            echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'. Line content: '${line}'" >&2
             ((line_num++))
+            echo "DEBUG PARSING: Incremented line_num to '$line_num'." >&2
 
             if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
                 if [[ -n "${BASH_REMATCH[1]}" ]]; then
@@ -348,15 +352,19 @@ function hit_api { # NOSONAR
                 fi
                 continue
             fi
+            echo "DEBUG PARSING: Past HTTP_STATUS_CODE check." >&2
 
             if [[ "$headers_done" == false ]]; then
+                echo "DEBUG PARSING: In headers_done==false block." >&2
                 if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
+                    echo "DEBUG PARSING: Matched HTTP status line (line_num 1)." >&2
                     http_status_line="$line"
                     if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
                         status_code="${BASH_REMATCH[1]}"
                     fi
                 elif [[ -z "$line" ]]; then
                     headers_done=true
+                    echo "DEBUG PARSING: Empty line found, headers_done set to true." >&2
                 else
                     response_headers+="$line"$'\n'
                 fi
@@ -364,6 +372,7 @@ function hit_api { # NOSONAR
                 response_body+="$line"$'\n'
             fi
         done <<< "$raw_output" # Using here-string
+        echo "DEBUG PARSING: Exited while loop." >&2
 
         # Final check for status_code if not found via -w (should be rare now)
         if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
