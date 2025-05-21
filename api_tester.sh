@@ -361,13 +361,13 @@ function hit_api { # NOSONAR
     # Read line by line, handling CR characters
     while IFS= read -r line; do
         line=${line%$'\r'} # Remove trailing CR if present
-        echo "DEBUG PARSING: line_num=$line_num, line='${line}'" >&2 # Added debug
-        echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'" >&2
-        ((line_num++)) || echo "ERROR PARSING: Failed to increment line_num. Exit code $?. Current line_num: '$line_num' (before potential failed increment)" >&2
-        echo "DEBUG PARSING: line_num after increment: '$line_num'" >&2
+        # echo "DEBUG PARSING: line_num=$line_num, line='${line}'" >&2 # Removed
+        # echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'" >&2 # Removed
+        ((line_num++)) # || echo "ERROR PARSING: Failed to increment line_num. Exit code $?. Current line_num: '$line_num' (before potential failed increment)" >&2 # Removed
+        # echo "DEBUG PARSING: line_num after increment: '$line_num'" >&2 # Removed
 
         if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
-            echo "DEBUG PARSING: Matched HTTP_STATUS_CODE line. BASH_REMATCH[0]='${BASH_REMATCH[0]}', BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Added debug
+            # echo "DEBUG PARSING: Matched HTTP_STATUS_CODE line. BASH_REMATCH[0]='${BASH_REMATCH[0]}', BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Removed
             if [[ -n "${BASH_REMATCH[1]}" ]]; then
                 status_code="${BASH_REMATCH[1]}"
             else
@@ -381,9 +381,9 @@ function hit_api { # NOSONAR
                 http_status_line="$line"
                 # Try to extract status code from here as a fallback
                 if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
-                    echo "DEBUG PARSING: Fallback status code from HTTP status line. BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Added debug
+                    # echo "DEBUG PARSING: Fallback status code from HTTP status line. BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Removed
                     status_code="${BASH_REMATCH[1]}"
-                    echo "DEBUG PARSING: Fallback status_code set to '$status_code'" >&2
+                    # echo "DEBUG PARSING: Fallback status_code set to '$status_code'" >&2 # Removed
                 fi
             elif [[ -z "$line" ]]; then # Empty line signifies end of headers
                 headers_done=true
@@ -395,7 +395,7 @@ function hit_api { # NOSONAR
         fi
     done <<< "$raw_output"
 
-    echo "DEBUG PARSING: Loop finished. status_code='${status_code}'" >&2 # Added debug
+    # echo "DEBUG PARSING: Loop finished. status_code='${status_code}'" >&2 # Removed
     # Final check for status_code if not found via -w (should be rare now)
     if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
         status_code="${BASH_REMATCH[1]}"
