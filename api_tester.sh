@@ -6,8 +6,6 @@
 #          governance policy violations, OWASP Top 10 patterns, shadow, and zombie APIs.
 # Usage: ./api-tester.sh [http(s)://your-haproxy-host:port]
 
-# See https://raw.githubusercontent.com/allthingsclowd/api-traffic-generator/refs/heads/grazzer/api_tester.sh for the original version that's actually used in the repo.
-
 # --- Configuration ---
 set -euo pipefail # Exit on error, undefined variable, or pipe failure
 
@@ -21,13 +19,7 @@ else
   CUSTOM_HOST_HEADER=""
 fi
 
-if command -v date >/dev/null 2>&1; then
-  DATE_OUTPUT=$(date '+%Y-%m-%d_%H-%M-%S')
-  DATE_EXIT_CODE=$?
-else
-  echo "ERROR: 'date' command NOT found in PATH. This is unexpected." >&2
-fi
-
+# Get date for log file name, ensure date command works
 DATE_FOR_LOG=$(date '+%Y-%m-%d_%H-%M-%S')
 DATE_FOR_LOG_EXIT_CODE=$?
 
@@ -42,7 +34,6 @@ LOG="/tmp/api_tester_${DATE_FOR_LOG}.log"
 DURATION_SECONDS=180
 
 # --- API Endpoint Definitions ---
-echo "DEBUG: API Endpoint Definitions arrays defined." >&2
 # Regular Endpoints (Used for Valid Traffic)
 ESHOP_API_ENDPOINTS=(
   "/products" "/orders" "/users" "/addresses" "/payments" "/cart" "/wishlist" "/notifications"
@@ -123,7 +114,6 @@ MALICIOUS_PAYLOADS=(
 )
 
 # --- Helper Functions ---
-echo "DEBUG: Entering Helper Functions definitions section." >&2
 
 # Function to choose a random element from an array
 rand_elem() {
@@ -143,12 +133,8 @@ generate_uuid() {
 
 # Function to log actions to console and file
 log_action() {
-  # Debug: Indicate log_action was called
-  echo "DEBUG: log_action called with: $1" >&2
   # Use printf for better formatting control and to avoid potential echo interpretation issues
   printf "%s [+] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$LOG"
-  # Debug: Indicate log_action finished
-  echo "DEBUG: log_action for '$1' completed." >&2
 }
 
 
@@ -245,12 +231,11 @@ send_api_with_payload() {
 
     hit_api "$method" "$url" "$note" "$body" false false "" "$content_type"
 }
-echo "DEBUG: All Helper Functions defined." >&2
+
 # --- Core API Interaction Function ---
 # Executes a curl request, logs details, handles headers and output parsing.
 # Usage: hit_api method url note [body] [omit_auth] [add_pii_header] [force_protocol] [content_type]
 function hit_api { # NOSONAR
-    echo "DEBUG: Entered hit_api function." >&2
     local method=$1
     local url=$2
     local note=$3
@@ -301,7 +286,6 @@ function hit_api { # NOSONAR
     local cmd_str_log="${cmd_str_log_array[*]}"
 
     local raw_output exit_code
-    echo "DEBUG: Executing curl command: $cmd_str_log" >&2
 
     # Temporarily disable exit on error for the curl command to handle its exit code
     local prev_set_e_state=""
@@ -312,40 +296,37 @@ function hit_api { # NOSONAR
     exit_code=$?
 
     if [[ "$prev_set_e_state" == "enabled" ]]; then set -e; fi # Restore set -e
-
-    echo "DEBUG: curl command finished. Exit code: $exit_code" >&2
     
     # Use printf for safer output of raw_output and check its exit code
-    printf "DEBUG: Raw curl output:\n%s\n" "$raw_output" >&2
+    # printf "DEBUG: Raw curl output:\n%s\n" "$raw_output" >&2 # Keeping this commented for cleaner logs, uncomment if deep debugging needed
     local printf_exit_code=$?
-    echo "DEBUG: printf for raw_output finished. Exit code: $printf_exit_code" >&2
     if [[ $printf_exit_code -ne 0 ]]; then
         echo "ERROR: printf command failed with exit code $printf_exit_code while printing raw_output. This is highly unusual." >&2
-        # Depending on the severity, you might choose to exit or try to continue
-        # For now, let's log and attempt to continue with parsing if raw_output might still be usable
     fi
 
-    echo "DEBUG: Attempting to proceed past printf." >&2
+    # Handle curl exit codes (moved after printf to ensure raw_output is available for logging on error)
+    if [[ $exit_code -ne 0 && $exit_code -ne 22 && $exit_code -ne 18 && $exit_code -ne 28 && $exit_code -ne 60 ]]; then
+        log_action "  ERROR: curl command failed with unexpected exit code $exit_code for $method $url."
+        log_action "  Executed command approx: $cmd_str_log"
+        log_action "  Curl output (if any): $raw_output"
+    elif [[ $exit_code -eq 18 || $exit_code -eq 28 ]]; then
+        log_action "  WARNING: curl command for $method $url completed with exit code $exit_code (Timeout/Partial File). Output: $raw_output"
+    fi
 
     # Parse headers, body, and status code from raw_output
-    local response_headers="" # UNCOMMENTED
-    local response_body=""    # UNCOMMENTED
-    local status_code=""      # UNCOMMENTED
-    local headers_done=false  # UNCOMMENTED
-    local line_num=0          # UNCOMMENTED
-    local http_status_line="" # UNCOMMENTED
+    local response_headers=""
+    local response_body=""
+    local status_code=""
+    local headers_done=false
+    local line_num=0
+    local http_status_line=""
 
-    if [[ -n "$raw_output" ]]; then # UNCOMMENTED
-        echo "DEBUG PARSING: Entered 'if -n raw_output' block." >&2
-        # local status_code="XXX" # Placeholder - REMOVE THIS LINE
+    if [[ -n "$raw_output" ]]; then
 
         # Read line by line, handling CR characters
         while IFS= read -r line; do
-            echo "DEBUG PARSING: Top of while loop. line_num='$line_num'" >&2
             line=${line%$'\r'} # Remove trailing CR if present
-            echo "DEBUG PARSING: About to increment line_num. Current value: '$line_num'. Line content: '${line}'" >&2
             ((line_num++)) || true # Ensure set -e doesn't trip on ((0)) returning 1
-            echo "DEBUG PARSING: Incremented line_num to '$line_num'." >&2
 
             if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
                 if [[ -n "${BASH_REMATCH[1]}" ]]; then
@@ -353,19 +334,15 @@ function hit_api { # NOSONAR
                 fi
                 continue
             fi
-            echo "DEBUG PARSING: Past HTTP_STATUS_CODE check." >&2
 
             if [[ "$headers_done" == false ]]; then
-                echo "DEBUG PARSING: In headers_done==false block." >&2
                 if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then
-                    echo "DEBUG PARSING: Matched HTTP status line (line_num 1)." >&2
                     http_status_line="$line"
                     if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
                         status_code="${BASH_REMATCH[1]}"
                     fi
                 elif [[ -z "$line" ]]; then
                     headers_done=true
-                    echo "DEBUG PARSING: Empty line found, headers_done set to true." >&2
                 else
                     response_headers+="$line"$'\n'
                 fi
@@ -373,7 +350,6 @@ function hit_api { # NOSONAR
                 response_body+="$line"$'\n'
             fi
         done <<< "$raw_output" # Using here-string
-        echo "DEBUG PARSING: Exited while loop." >&2
 
         # Final check for status_code if not found via -w (should be rare now)
         if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
@@ -383,11 +359,11 @@ function hit_api { # NOSONAR
             log_action "  ERROR: Failed to parse HTTP status code from curl output (loop processed). Raw output was:\n$raw_output"
             status_code="000" # Assign a non-standard code to indicate parsing failure
         fi
-        response_body=${response_body%$'\n'} # Remove last newline from body if present - UNCOMMENTED
-    else # UNCOMMENTED
-        log_action "  WARNING: Raw curl output was empty. Skipping parsing." # UNCOMMENTED
-        status_code="000" # Indicate an issue # UNCOMMENTED
-    fi # UNCOMMENTED
+        response_body=${response_body%$'\n'} # Remove last newline from body if present
+    else
+        log_action "  WARNING: Raw curl output was empty. Skipping parsing."
+        status_code="000" # Indicate an issue
+    fi
 
     log_action "  Response Status: $status_code"
     # Log headers if any were captured
@@ -402,7 +378,6 @@ function hit_api { # NOSONAR
 }
 
 # --- Simulation Functions ---
-echo "DEBUG: Defining Simulation Functions." >&2
 
 # Simulate valid user traffic
 simulate_valid_traffic() {
@@ -419,7 +394,6 @@ simulate_valid_traffic() {
   fi
   hit_api "$method" "$HOST$endpoint" "Valid $api_group_name Traffic" "$payload"
 }
-echo "DEBUG: simulate_valid_traffic function defined." >&2
 
 # Simulate governance policy violations
 simulate_governance_violation() {
@@ -461,7 +435,6 @@ simulate_governance_violation() {
 
   hit_api "$method" "$HOST$endpoint" "$note" "" "$omit_auth_flag" "$add_pii" "$force_proto" "$content_type_override"
 }
-echo "DEBUG: simulate_governance_violation function defined." >&2
 
 # Simulate OWASP API Top 10 patterns
 simulate_owasp_attack() {
@@ -490,7 +463,6 @@ simulate_owasp_attack() {
 
   hit_api "$method" "$HOST$endpoint" "$note" "$payload" false false "" "$content_type_override"
 }
-echo "DEBUG: simulate_owasp_attack function defined." >&2
 
 # Simulate Shadow/Zombie API traffic
 simulate_shadow_zombie_traffic() {
@@ -502,31 +474,22 @@ simulate_shadow_zombie_traffic() {
   fi
   hit_api "$method" "$HOST$endpoint" "Shadow/Zombie API Traffic" "$payload"
 }
-echo "DEBUG: simulate_shadow_zombie_traffic function defined." >&2
-echo "DEBUG: All Simulation Functions defined." >&2
 
 # --- Main Simulation Loop ---
-echo "DEBUG: Script has reached the Main Simulation Loop section." >&2
 START_TIME=$(date +%s)
-echo "DEBUG: START_TIME set to $START_TIME" >&2
-echo "DEBUG: LOG file path is $LOG" >&2
 
 # Ensure log file is writable, create if not exists (tee -a will do this, but good to be explicit for first log)
-echo "DEBUG: Attempting to touch log file: $LOG" >&2
 touch "$LOG" || { echo "ERROR: Cannot create or touch log file $LOG. Exiting." >&2; exit 1; }
-echo "DEBUG: Log file touched successfully (or already existed)." >&2
 
-log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Target: http://localhost:80. Log file: $LOG"
+log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Target: $HOST. Log file: $LOG"
 if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
   log_action "Using custom Host header: $CUSTOM_HOST_HEADER"
 fi
 
 # Counter for requests
-echo "DEBUG: Initializing REQUEST_COUNT." >&2
 REQUEST_COUNT=0
 
 while true; do
-  echo "DEBUG: Top of main while loop. REQUEST_COUNT: $REQUEST_COUNT" >&2
   CURRENT_TIME=$(date +%s)
   ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
 
@@ -537,7 +500,6 @@ while true; do
 
   # Randomly select a simulation type
   SIM_TYPE=$((RANDOM % 100))
-  echo "DEBUG: SIM_TYPE is $SIM_TYPE" >&2
 
   if [[ $SIM_TYPE -lt 50 ]]; then # 50% Valid Traffic
     API_GROUP_CHOICE=$((RANDOM % 5))
@@ -557,16 +519,11 @@ while true; do
   fi
 
   REQUEST_COUNT=$((REQUEST_COUNT + 1))
-  echo "DEBUG: REQUEST_COUNT is now $REQUEST_COUNT." >&2
-
 
   # Random delay between requests (e.g., 0.1 to 1 second)
-  echo "DEBUG: About to calculate DELAY using awk." >&2
   if command -v awk >/dev/null 2>&1; then
-    echo "DEBUG: 'awk' command found in PATH." >&2
     DELAY_VALUE=$(awk -v min=0.1 -v max=1.0 'BEGIN{srand(); print min+rand()*(max-min)}')
     AWK_EXIT_CODE=$?
-    echo "DEBUG: 'awk' command executed. Exit code: $AWK_EXIT_CODE. Output: '$DELAY_VALUE'" >&2
     if [[ $AWK_EXIT_CODE -ne 0 ]]; then
       echo "ERROR: awk command failed with exit code $AWK_EXIT_CODE. Using default delay 0.5s." >&2
       DELAY_VALUE="0.5"
@@ -588,4 +545,3 @@ while true; do
 done
 
 log_action "API traffic generation finished. Total requests: $REQUEST_COUNT."
-echo "DEBUG: Script finished successfully." >&2
