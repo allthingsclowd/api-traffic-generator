@@ -361,10 +361,16 @@ function hit_api { # NOSONAR
     # Read line by line, handling CR characters
     while IFS= read -r line; do
         line=${line%$'\r'} # Remove trailing CR if present
+        echo "DEBUG PARSING: line_num=$line_num, line='${line}'" >&2 # Added debug
         ((line_num++))
 
         if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
-            status_code="${BASH_REMATCH[1]}"
+            echo "DEBUG PARSING: Matched HTTP_STATUS_CODE line. BASH_REMATCH[0]='${BASH_REMATCH[0]}', BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Added debug
+            if [[ -n "${BASH_REMATCH[1]}" ]]; then
+                status_code="${BASH_REMATCH[1]}"
+            else
+                echo "DEBUG PARSING: WARNING - BASH_REMATCH[1] is empty despite regex match for HTTP_STATUS_CODE line." >&2
+            fi
             continue # This should be the last line from curl's main output due to -w
         fi
 
@@ -373,7 +379,9 @@ function hit_api { # NOSONAR
                 http_status_line="$line"
                 # Try to extract status code from here as a fallback
                 if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+                    echo "DEBUG PARSING: Fallback status code from HTTP status line. BASH_REMATCH[1]='${BASH_REMATCH[1]}'" >&2 # Added debug
                     status_code="${BASH_REMATCH[1]}"
+                    echo "DEBUG PARSING: Fallback status_code set to '$status_code'" >&2
                 fi
             elif [[ -z "$line" ]]; then # Empty line signifies end of headers
                 headers_done=true
@@ -385,6 +393,7 @@ function hit_api { # NOSONAR
         fi
     done <<< "$raw_output"
 
+    echo "DEBUG PARSING: Loop finished. status_code='${status_code}'" >&2 # Added debug
     # Final check for status_code if not found via -w (should be rare now)
     if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
         status_code="${BASH_REMATCH[1]}"
