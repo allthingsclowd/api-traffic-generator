@@ -1,0 +1,112 @@
+name: Test Traffic Generator
+
+on:
+  push:
+    branches: [ grazzer ]
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  test_traffic_script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker and HAProxy
+        run: |
+          mkdir -p haproxy_config/icons
+          cp haproxy.cfg haproxy_config/
+          # Create a dummy 1x1 transparent PNG file for favicon
+          echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x62\x60\x00\x00\x00\x02\x00\x01\xe2!\xbc\x33\x00\x00\x00\x00IEND\xaeB\x60\x82" > haproxy_config/icons/favicon-32x32.png
+          docker run -d --name haproxy-test-instance -p 8080:80 -v ${{ github.workspace }}/haproxy_config:/usr/local/etc/haproxy:ro haproxy:latest
+        working-directory: ${{ github.workspace }}
+
+      - name: Wait for HAProxy to be ready
+        run: |
+          echo "Waiting for HAProxy to start..."
+          sleep 10 # Initial delay for HAProxy to initialize
+          timeout 30s bash -c 'until curl -sSf http://localhost:8080/eshop/products > /dev/null; do echo "Waiting for HAProxy response on /eshop/products..."; sleep 2; done'
+          echo "HAProxy is responding."
+          echo "Checking HAProxy on / (should be a default backend or error, but confirms service is up)"
+          curl -I http://localhost:8080 || echo "Curl to / failed but continuing, main test is specific endpoints."
+          echo "Checking HAProxy on a known backend /eshop/products"
+          curl -I http://localhost:8080/eshop/products
+
+      - name: Run the traffic generator script
+        run: |
+          chmod +x api_tester.sh
+          ./api_tester.sh http://localhost:8080
+        working-directory: ${{ github.workspace }}
+
+      - name: Verify script execution (implicit)
+        run: |
+          echo "api_tester.sh completed. If it had failed, the workflow would have stopped due to 'set -e' in the script or a non-zero exit code."
+
+      - name: Find and prepare log file
+        id: find_log
+        run: |
+          log_file_path=$(ls -t /tmp/api_tester_*.log | head -n 1)
+          if [ -z "$log_file_path" ]; then
+            echo "Log file not found in /tmp with pattern api_tester_*.log!" >&2
+            # List /tmp content for debugging
+            ls -la /tmp
+            exit 1
+          fi
+          echo "Found log file: $log_file_path"
+          # Copy log to workspace for potential artifact upload and easier access in logs
+          cp "$log_file_path" "${{ github.workspace }}/api_tester_output.log"
+          echo "log_file_path=${{ github.workspace }}/api_tester_output.log" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Check log file content
+        run: |
+          log_file="${{ steps.find_log.outputs.log_file_path }}"
+          echo "Checking log file: $log_file"
+
+          if [ ! -s "$log_file" ]; then
+            echo "Log file is empty or does not exist at the expected workspace path!" >&2
+            exit 1
+          fi
+          echo "Log file exists in workspace and is not empty."
+
+          patterns=(
+            "SIMULATED-HR-123"
+            "SIMULATED-FIN-456"
+            "SIMULATED-PROD-789"
+            "TXN12345" # From banking_backend in haproxy.cfg
+            "SIMULATED-ESHOP-002"
+            "Shadow API is operational" # From shadow_api acl in haproxy.cfg
+            "Zombie API is still active" # From zombie_api acl in haproxy.cfg
+            "Drifted API Response: BETA-001" # Specific check for drifted endpoint
+          )
+          
+          missing_patterns=0
+          for pattern in "${patterns[@]}"; do
+            if ! grep -q "$pattern" "$log_file"; then
+              echo "Pattern '$pattern' not found in log file!" >&2
+              missing_patterns=$((missing_patterns + 1))
+            else
+              echo "Pattern '$pattern' found."
+            fi
+          done
+
+          if [ "$missing_patterns" -gt 0 ]; then
+            echo "$missing_patterns pattern(s) missing. Failing the test." >&2
+            echo "--- Full log content ($log_file) ---"
+            cat "$log_file"
+            echo "--- End of log ---"
+            exit 1
+          fi
+          
+          echo "All expected patterns found in log file."
+        shell: bash
+
+      - name: Upload HAProxy and Traffic Generator Logs
+        if: always() # Run this step even if previous steps fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            ${{ github.workspace }}/api_tester_output.log
+            # Potentially add HAProxy logs if possible, e.g., by capturing 'docker logs haproxy-test-instance'
+          retention-days: 7
