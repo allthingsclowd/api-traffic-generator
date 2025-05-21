@@ -51,10 +51,17 @@ jobs:
       - name: Run the traffic generator script
         run: |
           chmod +x api_tester.sh
-          # HAProxy is accessible on localhost:80 due to port mapping in `docker run`
-          ./api_tester.sh http://localhost:80
+          # HAProxy is accessible on localhost:80 due to port mapping in `docker run`.
+          # Capture script output for debugging and save to a file in the workspace.
+          # Use 'set -o pipefail' to ensure the step fails if any command in the pipe fails.
+          set -o pipefail
+          ./api_tester.sh http://localhost:80 2>&1 | tee api_tester_console_output.log
         working-directory: ${{ github.workspace }}
 
+      - name: List /tmp contents after script run
+        run: |
+          echo "Listing contents of /tmp after script execution:"
+          ls -la /tmp
       - name: Verify script execution (implicit)
         run: |
           echo "api_tester.sh completed. If it had failed, the workflow would have stopped due to 'set -e' in the script or a non-zero exit code."
@@ -124,6 +131,7 @@ jobs:
         with:
           name: test-logs
           path: |
+            ${{ github.workspace }}/api_tester_console_output.log # Upload console output
             ${{ github.workspace }}/api_tester_output.log
             # Note: Accessing HAProxy logs from a service container is not as direct as 'docker logs'.
             # For manually started containers, use 'docker logs <container_name>'
