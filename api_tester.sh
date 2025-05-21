@@ -350,8 +350,62 @@ function hit_api { # NOSONAR
         log_action "  WARNING: curl command for $method $url completed with exit code $exit_code (Timeout/Partial File). Output: $raw_output"
     fi
 
-    # For this step, just log raw output and return 0. Response parsing will be next.
-    return 0
+    # Parse headers, body, and status code from raw_output
+    local response_headers=""
+    local response_body=""
+    local status_code="" # This will be extracted from the last line if -w worked
+    local headers_done=false
+    local line_num=0
+    local http_status_line="" # To capture the first line like "HTTP/1.1 200 OK"
+
+    # Read line by line, handling CR characters
+    while IFS= read -r line; do
+        line=${line%$'\r'} # Remove trailing CR if present
+        ((line_num++))
+
+        if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
+            status_code="${BASH_REMATCH[1]}"
+            continue # This should be the last line from curl's main output due to -w
+        fi
+
+        if [[ "$headers_done" == false ]]; then
+            if [[ $line_num -eq 1 && "$line" =~ ^HTTP/[0-9.]+ ]]; then # First line is HTTP status
+                http_status_line="$line"
+                # Try to extract status code from here as a fallback
+                if [[ -z "$status_code" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+                    status_code="${BASH_REMATCH[1]}"
+                fi
+            elif [[ -z "$line" ]]; then # Empty line signifies end of headers
+                headers_done=true
+            else
+                response_headers+="$line"$'\n'
+            fi
+        else # After headers_done is true, it's the body
+            response_body+="$line"$'\n'
+        fi
+    done <<< "$raw_output"
+
+    # Final check for status_code if not found via -w (should be rare now)
+    if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+        status_code="${BASH_REMATCH[1]}"
+        log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line. -w output might have been missing."
+    elif [[ -z "$status_code" ]]; then
+        log_action "  ERROR: Failed to parse HTTP status code from curl output. Raw output was:\n$raw_output"
+        status_code="000" # Assign a non-standard code to indicate parsing failure
+    fi
+
+    response_body=${response_body%$'\n'} # Remove last newline from body if present
+
+    log_action "  Response Status: $status_code"
+    # Log headers if any were captured
+    if [[ -n "$response_headers" ]]; then
+      printf "  Response Headers:\n%s" "$response_headers" | tee -a "$LOG"
+      log_action "" # Add a blank line after headers in the log
+    else
+      log_action "  Response Headers: (None captured or empty)"
+    fi
+    log_action "  Response Body:\n${response_body}" # Log body even if empty
+    echo "" | tee -a "$LOG" # Ensure a blank line after body in the main log
 }
 # echo "DEBUG: hit_api function definition processed." >&2 # Removed granular debug
 
