@@ -10,7 +10,7 @@ The original motivation for this repository was to provide a reliable way to fet
 
 This project currently simulates HTTP traffic. For instructions on how to enable TLS/HTTPS for a more comprehensive testing scenario, including generating self-signed certificates and configuring HAProxy and the client script accordingly, please refer to the following document:
 
-*   FutureTLSEnhancement.md
+*  [What's next?](FutureTLSEnhancement.md) 
 
 This outlines the steps for a potential future update.
 ## What it Does
