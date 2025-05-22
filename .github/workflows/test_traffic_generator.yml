@@ -2,7 +2,7 @@ name: Test Traffic Generator
 
 on:
   push:
-    branches: [ grazzer ]
+    branches: [ grazzer, fixHeaders ]
   workflow_dispatch: # Allows manual triggering
 
 jobs:
