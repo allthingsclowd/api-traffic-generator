@@ -310,6 +310,20 @@ function hit_api { # NOSONAR
         header_args+=("Host: $CUSTOM_HOST_HEADER")
     fi
 
+    log_action "  Request Headers:"
+    local h_idx=0
+    while [[ $h_idx -lt ${#header_args[@]} ]]; do
+        # Headers are added in pairs: -H, Header:Value
+        if [[ "${header_args[h_idx]}" == "-H" && $((h_idx + 1)) -lt ${#header_args[@]} ]]; then
+            log_action "    ${header_args[h_idx+1]}"
+            h_idx=$((h_idx + 2))
+        else
+            # This case should ideally not be reached if build_headers_args_list is correct
+            log_action "    (Malformed header arg: ${header_args[h_idx]})"
+            h_idx=$((h_idx + 1))
+        fi
+    done
+
     curl_args+=("${header_args[@]}")
 
     if [[ -n "$body" ]]; then
@@ -364,10 +378,14 @@ function hit_api { # NOSONAR
     local http_status_line=""
 
     if [[ -n "$raw_output" ]]; then
+        # Trim leading blank lines from raw_output, as they can prematurely set headers_done=true
+        # This ensures that the first non-blank line is processed for the HTTP status or as a header.
+        local trimmed_raw_output
+        trimmed_raw_output=$(echo "$raw_output" | sed '/./,$!d') # Delete leading empty lines
 
         # Read line by line, handling CR characters
         while IFS= read -r line; do
-            line=${line%$'\r'} # Remove trailing CR if present
+            line=${line%%$'\r'} # Remove trailing CR if present (use %% for safety with empty lines)
             ((line_num++)) || true # Ensure set -e doesn't trip on ((0)) returning 1
 
             if [[ "$line" =~ ^HTTP_STATUS_CODE:([0-9]{3})$ ]]; then # Check for our appended status code
@@ -391,7 +409,7 @@ function hit_api { # NOSONAR
             else
                 response_body+="$line"$'\n'
             fi
-        done <<< "$raw_output" # Using here-string
+        done <<< "$trimmed_raw_output" # Use the trimmed output
 
         # Final check for status_code if not found via -w (should be rare now)
         if [[ -z "$status_code" && -n "$http_status_line" && "$http_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
@@ -399,7 +417,7 @@ function hit_api { # NOSONAR
             log_action "  WARNING: Used fallback status code ($status_code) from HTTP status line. -w output might have been missing."
         elif [[ -z "$status_code" ]]; then
             log_action "  ERROR: Failed to parse HTTP status code from curl output (loop processed). Raw output was:\n$raw_output"
-            status_code="000" # Assign a non-standard code to indicate parsing failure
+            status_code="000" # Assign a non-standard code to indicate parsing failure if not already set
         fi
         response_body=${response_body%$'\n'} # Remove last newline from body if present
     else
