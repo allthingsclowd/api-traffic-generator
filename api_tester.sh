@@ -475,6 +475,34 @@ simulate_shadow_zombie_traffic() {
   hit_api "$method" "$HOST$endpoint" "Shadow/Zombie API Traffic" "$payload"
 }
 
+# --- Function to hit critical endpoints for pattern checking ---
+ensure_critical_endpoints_hit() {
+  log_action "Ensuring all critical endpoints are hit for pattern verification..."
+  
+  # Define critical endpoints: METHOD PATH NOTE_SUFFIX
+  # These paths should correspond to backends that produce unique, verifiable patterns.
+  local critical_endpoints_and_notes=(
+    "GET /hr/employees SIMULATED-HR-123-Check"                 # For hr_backend
+    "GET /finance/transactions SIMULATED-FIN-456-Check"          # For finance_backend
+    "GET /products/catalog SIMULATED-PROD-789-Check"           # For products_backend
+    "GET /banking/accounts TXN12345-Check"                     # For banking_backend (returns TXN12345)
+    "GET /eshop/orders SIMULATED-ESHOP-002-Check"              # For eshop_backend
+    "GET /shadow-api/undocumented Shadow-API-Check"              # For shadow_api_backend
+    "GET /zombie-api/v1/resource Zombie-API-Check"             # For zombie_api_backend
+    "GET /eshop/catalog/products-beta Drifted-API-Check"         # For drifted_api_backend
+  )
+
+  for entry in "${critical_endpoints_and_notes[@]}"; do
+    local method=$(echo "$entry" | awk '{print $1}')
+    local path=$(echo "$entry" | awk '{print $2}')
+    local note_suffix=$(echo "$entry" | awk '{print $3}')
+    # Using GET and no body for simplicity in these deterministic checks
+    hit_api "$method" "$HOST$path" "Critical Check: $note_suffix" ""
+    sleep 0.2 # Small delay between these specific checks to avoid overwhelming logs/system
+  done
+  log_action "Finished hitting critical endpoints."
+}
+
 # --- Main Simulation Loop ---
 START_TIME=$(date +%s)
 
@@ -485,6 +513,9 @@ log_action "Starting API traffic generation for $DURATION_SECONDS seconds. Targe
 if [[ -n "$CUSTOM_HOST_HEADER" ]]; then
   log_action "Using custom Host header: $CUSTOM_HOST_HEADER"
 fi
+
+# Hit critical endpoints once to ensure their patterns are logged
+ensure_critical_endpoints_hit
 
 # Counter for requests
 REQUEST_COUNT=0
