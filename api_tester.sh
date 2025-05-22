@@ -230,6 +230,7 @@ build_headers_args_list() {
   local base_user_agent
   base_user_agent=$(rand_elem "${USER_AGENTS[@]}")
   echo "User-Agent: ${base_user_agent} APITrafficGenerator/3.2.0"
+  echo "-H" # Add -H for X-Forwarded-For
   # Generate 3 random public-looking IP addresses for X-Forwarded-For
   local ip1="$((RANDOM % 254 + 1)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 256))"
   local ip2="$((RANDOM % 254 + 1)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 256))"
