@@ -56,7 +56,10 @@ The `api_tester.sh` script generates a variety of HTTP requests to a target API 
     *   Uses `curl` to send the constructed HTTP request.
     *   Includes various headers like `User-Agent`, `X-Request-ID`, `X-Forwarded-For`, `Protocol`, and `X-Role`.
 4.  **Response Parsing & Logging:**
-    *   Captures the full HTTP response (headers, body, status code).
+    *   Includes various headers like `X-Request-ID`, `Protocol`, and `X-Role`.
+    *   Sets the `User-Agent` header by randomly selecting from a diverse list of common browser, mobile, bot, and API client User-Agents, and appends `APITrafficGenerator/3.2.0` to the end for identification.
+    *   Generates a more realistic `X-Forwarded-For` header containing a chain of three random IP addresses.
+    *   Adds a simulated `X-JA3-Fingerprint` header with a randomly selected JA3 hash to mimic different client TLS fingerprints.
     *   Parses these components.
     *   Logs detailed information about each request and its corresponding response to a timestamped log file in `/tmp/` and also to standard output (which is then captured by the GitHub Actions workflow).
 
