@@ -196,7 +196,11 @@ build_headers_args_list() {
   echo "-H"
   echo "User-Agent: APITrafficGenerator/3.2.0"
   echo "-H"
-  echo "X-Forwarded-For: 192.168.$((RANDOM % 256)).$((RANDOM % 256))"
+  # Generate 3 random public-looking IP addresses for X-Forwarded-For
+  local ip1="$((RANDOM % 254 + 1)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 256))"
+  local ip2="$((RANDOM % 254 + 1)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 256))"
+  local ip3="$((RANDOM % 254 + 1)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 256))"
+  echo "X-Forwarded-For: $ip1, $ip2, $ip3"
   echo "-H"
   echo "Protocol: $proto_header"
   echo "-H"
