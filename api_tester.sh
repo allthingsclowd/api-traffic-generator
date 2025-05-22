@@ -113,6 +113,14 @@ MALICIOUS_PAYLOADS=(
   "$(head -c 1024 /dev/urandom | base64)"
 )
 
+# Sample JA3 Hashes (Populate with diverse, real JA3 hashes)
+# Find examples from sources like https://github.com/salesforce/ja3
+JA3_HASHES=(
+  "e7d705a3286e19ea42f5871d05441648" # Example: Chrome 70
+  "aa56c022c4d0510319019bab4103ed00" # Example: Firefox 63
+  "5936c60ef053e37f6755c029f95579f7" # Example: Curl 7.61.1 (OpenSSL)
+  "d41d8cd98f00b204e9800998ecf8427e" # Example: Empty (less common, but possible)
+)
 # --- Helper Functions ---
 
 # Function to choose a random element from an array
@@ -207,6 +215,10 @@ build_headers_args_list() {
   echo "X-Role: $role"
 
   if [[ "$omit_auth" == "false" ]]; then
+    local ja3_hash
+    ja3_hash=$(rand_elem "${JA3_HASHES[@]}")
+    echo "-H"
+    echo "X-JA3-Fingerprint: $ja3_hash"
     echo "-H"
     if [[ "$user" == "attacker" || "$role" == "anonymous" ]]; then
        echo "Authorization: Bearer invalid-token-$(generate_uuid)"
