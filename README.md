@@ -6,6 +6,13 @@ This repository contains a sophisticated API traffic generator script (`api_test
 
 The original motivation for this repository was to provide a reliable way to fetch the `api_tester.sh` script and its associated `haproxy.cfg` to a build server, especially when direct inclusion (e.g., in cloud-init user data) became problematic due to size constraints.
 
+## Future Enhancement: TLS Enablement
+
+This project currently simulates HTTP traffic. For instructions on how to enable TLS/HTTPS for a more comprehensive testing scenario, including generating self-signed certificates and configuring HAProxy and the client script accordingly, please refer to the following document:
+
+*   FutureTLSEnhancement.md
+
+This outlines the steps for a potential future update.
 ## What it Does
 
 The `api_tester.sh` script generates a variety of HTTP requests to a target API endpoint (configurable, defaults to `http://localhost`). It aims to mimic real-world API traffic, including:
